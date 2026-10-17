@@ -66,16 +66,19 @@ if (payload.authority !== authority) return undefined
 - **准入**：源 IP 白名单（`allowCidrs`，仅 IPv4 CIDR + `::1`）+ 可选 Basic；回环默认放行、可关。
 - **自愈**：上游 401 时重换 cookie 并重放一次（仅无 body 请求）。
 - **自检**：启动后取回 index + connection 客户端 bundle，确认仍含 `ownsHost`；结果写进 `lan-link.txt`（桌面版 stdout 是 /dev/null，文件才是可见通道）。
+- **隧道生命周期**：upgrade 路径必须为客户端 socket 挂 `error` 监听。Node 在 emit `upgrade` 前已摘除自己的 socket 监听，设备掉线的 TCP RST 否则变成未捕获错误事件——而 host 对未捕获异常是致命的（见 §5 事故记录）。监听器只销毁该条隧道，不触碰其他连接。
 
 ## 5. 验证记录
 
 | 层级 | 内容 | 结果 |
 |---|---|---|
-| 单元（`node --test test/`） | 注入/幂等、CIDR 与回环策略、Basic、Host/Origin/cookie、非文档逐字节透传、压缩 HTML 兜底、401 自愈、403、Basic 双路径、WebSocket 隧道、缝隙探测、文件产出与 `DSH_LAN_LINK` | 20/20 通过 |
+| 单元（`node --test test/`） | 注入/幂等、CIDR 与回环策略、Basic、Host/Origin/cookie、非文档逐字节透传、压缩 HTML 兜底、401 自愈、403、Basic 双路径、WebSocket 隧道、设备 RST 回归（子进程 fixture）、缝隙探测、文件产出与 `DSH_LAN_LINK` | 21/21 通过 |
 | 真机冒烟（`scripts/live-smoke.mjs`） | 会话换取、匿名 200、两段脚本注入、bundle 逐字节一致、缝隙探测、`/api/remote.mux` 升级、会话复用 | 9/9 通过 |
 | 应用内验收 | 运行中的 app（PID 90453）热加载后：`*:3081` LISTEN、`curl http://192.168.0.2:3081/` → 200 且注入生效、WS → `HTTP/1.1 101 Switching Protocols` | 通过 |
 
 **WebSocket 路径**：`/api/remote.mux`（`dsh-api-gateway` 的 `REMOTE_STREAM_MUX_PATH`，浏览器侧所有流都走它）。第一次用 `/api/events.mux` 探测超时纯属路径猜错——未知 upgrade 路径 harness 不回应。
+
+**事故记录（2026-10-18）**：桌面版在 02:26:52 整体退出，崩溃日志为 `dsh: fatal uncaught exception: Error: read ECONNRESET`（`syscall: 'read'`，`errno: -54`）。根因是设备 WebSocket 隧道被 RST 时，upgrade 路径的客户端 socket 没有 `error` 监听，异常以未捕获错误事件逃逸到 host。用同一运行时（Electron 44.7.0 / Node 24.21.0）以真实网关代码复现出的栈与崩溃日志逐字一致；补 `socket.on('error')` 后同一场景存活、隧道照常工作。`test/fixtures/upgrade-reset.mjs` 固化该场景，且必须子进程运行——回归时它会直接杀掉观察它的进程。
 
 ## 6. 风险与约束
 
@@ -88,7 +91,7 @@ if (payload.authority !== authority) return undefined
 
 ```sh
 cd ~/projects/dsh-plugins/packages/dsh-lan-link
-node --test test/                                   # 20/20
+node --test test/                                   # 21/21
 node scripts/live-smoke.mjs --host 192.168.0.2 --port 3081
 cat ~/.dsh/lan-link.txt | sed -n '/LAN gateway/,+5p' # 状态行 + 链接
 curl -s -o /dev/null -w '%{http_code}\n' http://192.168.0.2:3081/   # 200

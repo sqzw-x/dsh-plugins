@@ -3,8 +3,9 @@
  * upstream (Host/Origin/cookie), inject the two head scripts into documents
  * only, leave every other response byte-identical, hold the session itself
  * (so devices need no token), re-mint it when the harness rejects it, refuse
- * clients outside the allow list, and tunnel WebSocket upgrades with the
- * handshake intact.
+ * clients outside the allow list, tunnel WebSocket upgrades with the
+ * handshake intact, and survive a device that resets its tunnel instead of
+ * closing it.
  *
  * Run: node --test test/gateway.test.mjs
  */
@@ -13,7 +14,9 @@ import assert from 'node:assert/strict'
 import http from 'node:http'
 import net from 'node:net'
 import zlib from 'node:zlib'
+import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 import {
   HOST_CLAIM_SCRIPT,
   RANDOM_UUID_POLYFILL,
@@ -23,6 +26,9 @@ import {
   parseCidrs,
   startLanGateway
 } from '../lib/gateway.js'
+
+/** Fixture that resets a live tunnel; it has to run out of process (see below). */
+const RESET_FIXTURE = fileURLToPath(new URL('./fixtures/upgrade-reset.mjs', import.meta.url))
 
 /** Cookie the fake harness mints and then expects back on every request. */
 const SESSION_COOKIE = 'dsh-auth-test=SESSION'
@@ -364,6 +370,31 @@ test('WebSocket upgrades tunnel with the handshake and the host identity intact'
     await gateway.close()
     await upstream.close()
   }
+})
+
+test('a device that resets its tunnel does not take the host down', async () => {
+  // Node removes its own socket error listener before emitting 'upgrade', so a
+  // gateway that does not listen on the upgraded socket turns the device's
+  // ECONNRESET into an uncaught error event — and in the harness host an
+  // uncaught exception is fatal for the whole process. That failure kills
+  // whatever process observes it, so the scenario runs in this fixture.
+  const child = spawn(process.execPath, [RESET_FIXTURE], { stdio: ['ignore', 'pipe', 'pipe'] })
+  let stdout = ''
+  let stderr = ''
+  child.stdout.on('data', (chunk) => {
+    stdout += chunk
+  })
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk
+  })
+  const { code, signal } = await new Promise((resolve) => {
+    child.on('close', (code, signal) => resolve({ code, signal }))
+  })
+
+  assert.doesNotMatch(stderr, /ECONNRESET/, `the reset surfaced as an uncaught error:\n${stderr}`)
+  assert.equal(signal, null, `the fixture was killed by ${String(signal)}:\n${stderr}`)
+  assert.equal(code, 0, `the fixture exited ${String(code)}:\n${stderr}`)
+  assert.match(stdout, /survived the reset and still serves/)
 })
 
 test('the host-claim probe reports whether the served bundle still reads the flag', async () => {
