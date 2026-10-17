@@ -96,14 +96,23 @@ Four test layers: `test/engine.test.mjs` exercises the rule table, `test/client.
 
 ## Publishing
 
-Confirm that the package name in `package.json` belongs to this account on npm. Add an
-`NPM_TOKEN` secret (an npm granular access token with read/write package permission) under
-Settings → Secrets and variables → Actions, then tag the current `package.json` version
-with `v*` to run `.github/workflows/publish.yml`; the tag must match the package version.
+Releases use npm **Trusted Publishing** (OIDC); the workflow needs no long-lived `NPM_TOKEN`.
+
+1. **First release**: `dsh-focus-notify` does not exist on npm yet. Publish once locally (`npm login` then `npm publish --access public`) or with a one-off token in CI; this creates the package and its ownership.
+2. On npmjs.com open the package → **Settings → Trusted publishing** and add GitHub Actions:
+   - Organization or user: `sqzw-x`
+   - Repository: `dsh-focus-notify`
+   - Workflow filename: `publish.yml`
+   - Allowed actions: enable **npm publish** (`npm stage publish` is always allowed)
+3. After that, push a `v*` tag matching the `package.json` version; `.github/workflows/publish.yml` publishes over OIDC. A new configuration must complete one successful publish within **2 days** or it expires; if 0.3.0 was published manually, `npm version patch` to 0.3.1 and tag that.
+4. Once verified, delete any `NPM_TOKEN` and set the package's Publishing access to “Require two-factor authentication and disallow tokens”.
 
 ```sh
-git tag "v$(node -pe 'require("./package.json").version')"
-git push origin --tags
+# If the first version was already published manually: bump and verify via CI
+npm version patch && git push --follow-tags
+
+# Later releases
+git tag "v$(node -pe 'require("./package.json").version')" && git push origin --tags
 ```
 
 ## License

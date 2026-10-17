@@ -18,6 +18,12 @@ test('包名、版本与运行时报告的版本一致', () => {
   assert.equal(version, pkg.version, 'src/version.ts 要与 package.json 同步（release 检查）')
 })
 
+test('兼容声明：engines.dsh 覆盖已实测的 0.2.0-rc.2 与 0.2.1-rc.2', () => {
+  assert.equal(typeof pkg.engines?.dsh, 'string')
+  assert.match(pkg.engines.dsh, />=0\.2\.0-rc\.2/)
+  assert.match(pkg.engines.dsh, />=0\.2\.1-rc\.2/)
+})
+
 test('bundle 补丁存在，且插入的就是本插件的条目', () => {
   const patch = read('cordis.patch.yml')
   assert.match(patch, /insert:/)

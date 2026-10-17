@@ -120,11 +120,23 @@ npm test           # 构建 + node --test
 
 ## 发布
 
-发布前确认 `package.json` 里的包名在 npm 上归本账号所有。在仓库 Settings → Secrets and variables → Actions 配置 `NPM_TOKEN`（npm granular access token，勾选 read/write 包权限），然后给当前 `package.json` 版本打 `v*` 标签触发 `.github/workflows/publish.yml`；标签版本须与 `package.json` 一致。
+发布走 npm **Trusted Publishing**（OIDC），CI 不需要长期 `NPM_TOKEN`。
+
+1. **首次发布**：npm 上还没有 `dsh-focus-notify`，先本地 `npm login` 后执行 `npm publish --access public`（或临时用一次性 token 在 CI 发），创建包并确定归属。
+2. 在 npmjs.com 打开该包 → **Settings → Trusted publishing**，添加 GitHub Actions：
+   - Organization or user: `sqzw-x`
+   - Repository: `dsh-focus-notify`
+   - Workflow filename: `publish.yml`
+   - Allowed actions: 勾选 **npm publish**（`npm stage publish` 默认允许）
+3. 之后打 `v*` 标签即可由 `.github/workflows/publish.yml` 经 OIDC 发布；标签版本须与 `package.json` 一致。新配置要在 **2 天内完成一次成功发布**，否则过期；若 0.3.0 已手动发过，先 `npm version patch` 到 0.3.1 再打标签。
+4. 验证通过后删掉 `NPM_TOKEN`，并在包的 Publishing access 里选 “Require two-factor authentication and disallow tokens”。
 
 ```sh
-git tag "v$(node -pe 'require("./package.json").version')"
-git push origin --tags
+# 首版已手动发布过时：升到下一个版本并用 CI 验证 trusted publisher
+npm version patch && git push --follow-tags
+
+# 之后的版本
+git tag "v$(node -pe 'require("./package.json").version')" && git push origin --tags
 ```
 
 ## License
