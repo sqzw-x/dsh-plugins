@@ -1,6 +1,6 @@
-# dsh-alerts
+# dsh-focus-notify
 
-[![CI](https://github.com/sqzw-x/dsh-alerts/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-alerts/actions/workflows/ci.yml)
+[![CI](https://github.com/sqzw-x/dsh-focus-notify/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-focus-notify/actions/workflows/ci.yml)
 
 [English](README.en.md) | 中文
 
@@ -34,21 +34,21 @@ macOS 上窗口被别的应用盖住时，`document.hidden` 仍然是 `false` �
 
 ```sh
 # 从 GitHub 安装
-dsh plugin --profile desktop add github:sqzw-x/dsh-alerts
+dsh plugin --profile desktop add github:sqzw-x/dsh-focus-notify
 ```
 
 从本地目录安装（开发时）：
 
 ```sh
-dsh plugin --profile desktop add file:/absolute/path/to/dsh-alerts
+dsh plugin --profile desktop add file:/absolute/path/to/dsh-focus-notify
 ```
 
-npm 包发布后，可以改用 `dsh plugin --profile desktop add <npm 包名>`。
+npm 包发布后，可以改用 `dsh plugin --profile desktop add dsh-focus-notify`。
 
 装完**重启 DSH Desktop**：客户端 bundle 在页面加载时读取。停用而不卸载：在 profile 的 `cordis.patch.yml` 里写
 
 ```yaml
-- id: dsh-alerts
+- id: dsh-focus-notify
   disabled: true
 ```
 
@@ -57,19 +57,19 @@ npm 包发布后，可以改用 `dsh plugin --profile desktop add <npm 包名>`�
 默认值就能用。想改的话，在页面的控制台里：
 
 ```js
-__dshAlerts.configure({ sound: true })   // 打开提示音
-__dshAlerts.configure({ enabled: false }) // 暂时全关
-__dshAlerts.debug()                       // 当前会话、未送达的等待、计数器、权限、焦点、走哪条导航
-__dshAlerts.test()                        // 绕过规则立刻发一条，验证通道
-__dshAlerts.open('session-id')            // 按 id 切会话（缺省切当前会话），验证点击路径
+__dshFocusNotify.configure({ sound: true })   // 打开提示音
+__dshFocusNotify.configure({ enabled: false }) // 暂时全关
+__dshFocusNotify.debug()                       // 当前会话、未送达的等待、计数器、权限、焦点、走哪条导航
+__dshFocusNotify.test()                        // 绕过规则立刻发一条，验证通道
+__dshFocusNotify.open('session-id')            // 按 id 切会话（缺省切当前会话），验证点击路径
 ```
 
 `debug()` 里两个字段专门用来查"点了没反应"：
 
 - `navigation` — 点击时会用哪个服务切会话：`uiWorkspace.openSession` / `sessions.open` / `none`。
-- `counters.failed` — 导航调用抛错的次数；失败同时会往控制台打一条 `[dsh-alerts] …` 警告。
+- `counters.failed` — 导航调用抛错的次数；失败同时会往控制台打一条 `[dsh-focus-notify] …` 警告。
 
-每发出一条通知，插件还会在 `window` 上派发一个 `dsh-alerts:alert` 事件（`event.detail` 就是那条 alert：`kind` / `sessionId` / `title` / `body` / `tag`），想接自己的提醒方式（闪任务栏、换个声音、记日志）从这里挂即可。
+每发出一条通知，插件还会在 `window` 上派发一个 `dsh-focus-notify:alert` 事件（`event.detail` 就是那条 alert：`kind` / `sessionId` / `title` / `body` / `tag`），想接自己的提醒方式（闪任务栏、换个声音、记日志）从这里挂即可。
 
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
@@ -78,7 +78,7 @@ __dshAlerts.open('session-id')            // 按 id 切会话（缺省切当前�
 | `language` | `'auto'` | 文案语言：跟随 DSH 界面语言，也可固定 `'zh'` / `'en'` |
 | `sound` | `false` | 通知之外再响一声（WebAudio，需要页面有过交互） |
 
-配置存在 `localStorage` 的 `dshAlerts.config`。
+配置存在 `localStorage` 的 `dshFocusNotify.config`。
 
 ## 它怎么工作
 
@@ -101,7 +101,7 @@ __dshAlerts.open('session-id')            // 按 id 切会话（缺省切当前�
 - 只在 DSH Web / DSH Desktop 的页面里工作；`dsh-app://` 页面注册不了 Service Worker，所以没有通知上的按钮（本插件也不需要）。
 - "屏幕上的那个对话"由 `retainedBy.mainView` 推导；宿主没有这一信息时，所有会话都按"非当前"处理（也就是都会提醒）。
 - 通知的展示样式由系统决定（macOS：系统设置 → 通知 → DeepSeek Harness）。
-- 权限被拒绝时不发通知，`__dshAlerts.debug().permission` 会显示 `denied`。
+- 权限被拒绝时不发通知，`__dshFocusNotify.debug().permission` 会显示 `denied`。
 - **完成判定用 `running` 边沿，不用 SDK 的 `completionUnread`**：后者是侧栏的未读圆点，上游在主视图持有该会话时、以及 `running` 一旦为真时就清掉它 —— 拿它当"回复完成"的信号会让后台会话的完成提醒静默消失。代价是"客户端还没看到 `running === true` 就完成的回复"不提醒（例如回复恰好横跨一次页面重载）。
 - `package.json` 的 `dsh.compatibility.dshReleases` 只是**信息性声明**：DSH 0.2.0-rc.2 里没有代码读它，真正的兼容闸门是 `peerDependencies` 里的 `@deepseek-ai/dsh*`（本包声明的 `@deepseek-ai/cordis` 不在被检查的前缀里，因此是惰性的，与上游 `dsh-client-ui-session` 等包一致）。
 

@@ -57,7 +57,7 @@ test('非当前会话：有焦点、无焦点都弹', () => {
     assert.equal(alerts.length, 1)
     assert.equal(alerts[0].title, 'DSH · 需要你')
     assert.equal(alerts[0].body, '别的对话 · 审批请求')
-    assert.equal(alerts[0].tag, 'dsh-alerts:s-other')
+    assert.equal(alerts[0].tag, 'dsh-focus-notify:s-other')
     assert.equal(state.focused, focused)
   }
 })
@@ -273,5 +273,5 @@ test('forced() 绕过规则，供测试按钮使用', () => {
   const { engine } = makeEngine({ config: { enabled: false } })
   const alert = engine.forced('attention', 's-current')
   assert.equal(alert.kind, 'attention')
-  assert.equal(alert.tag, 'dsh-alerts:s-current')
+  assert.equal(alert.tag, 'dsh-focus-notify:s-current')
 })

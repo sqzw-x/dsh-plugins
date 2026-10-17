@@ -47,7 +47,7 @@ test('非当前会话的等待：窗口有焦点也弹', () => {
   })
   assert.equal(host.notifications().length, 1)
   assert.equal(host.last().title, 'DSH · 需要你')
-  assert.equal(host.last().options.tag, 'dsh-alerts:s-other')
+  assert.equal(host.last().options.tag, 'dsh-focus-notify:s-other')
   assert.equal(host.last().options.silent, true, '声音由插件自己负责')
 })
 
@@ -161,7 +161,7 @@ test('宿主没有导航服务：点击只抬窗，debug() 说明原因', () => 
   assert.equal(notification.closed, true)
 })
 
-test('__dshAlerts.open(id)：按 id 直接切会话，缺省切当前会话', () => {
+test('__dshFocusNotify.open(id)：按 id 直接切会话，缺省切当前会话', () => {
   const host = makeHost({ focused: true })
   assert.equal(host.api.open('s-other'), 'opened')
   assert.deepEqual(host.opened, ['s-other'])
@@ -212,7 +212,7 @@ test('手动切回会话：切到哪个会话就消掉哪个的通知', () => {
     's-sub': { running: false, pendingInteraction: undefined }
   })
   const notification = host.last()
-  assert.equal(notification.options.tag, 'dsh-alerts:s-other', '别的会话的等待')
+  assert.equal(notification.options.tag, 'dsh-focus-notify:s-other', '别的会话的等待')
   assert.equal(notification.closed, false)
 
   host.switchTo('s-other')
@@ -260,7 +260,7 @@ test('卸载：退订、摘掉运行时 API、不再弹、清掉自己的定时�
   host.dispose()
   assert.equal(host.statusStore.listenerCount, 0)
   assert.equal(host.listStore.listenerCount, 0)
-  assert.equal(host.api, undefined, 'window.__dshAlerts 应当被摘掉')
+  assert.equal(host.api, undefined, 'window.__dshFocusNotify 应当被摘掉')
   assert.ok(
     host.clearedTimeouts.includes(permissionPrompt),
     '卸载时要真的 clearTimeout 掉权限提示，而不是让 disposer 抛错再被兜住'

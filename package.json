@@ -1,6 +1,6 @@
 {
-  "name": "dsh-alerts",
-  "version": "0.2.2",
+  "name": "dsh-focus-notify",
+  "version": "0.3.0",
   "description": "Focus-aware notifications for DeepSeek Harness: approvals, questions, plan reviews and finished replies all arrive as one kind of alert — the conversation on screen only once its window loses focus, background conversations at any time, subagent sessions never.",
   "license": "MIT",
   "type": "module",
@@ -48,7 +48,8 @@
     "桌面通知"
   ],
   "engines": {
-    "node": ">=22.18"
+    "node": ">=22.18",
+    "dsh": ">=0.2.0-rc.2 <0.2.1-0"
   },
   "scripts": {
     "build": "tsdown",
@@ -62,11 +63,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sqzw-x/dsh-alerts.git"
+    "url": "git+https://github.com/sqzw-x/dsh-focus-notify.git"
   },
-  "homepage": "https://github.com/sqzw-x/dsh-alerts#readme",
+  "homepage": "https://github.com/sqzw-x/dsh-focus-notify#readme",
   "bugs": {
-    "url": "https://github.com/sqzw-x/dsh-alerts/issues"
+    "url": "https://github.com/sqzw-x/dsh-focus-notify/issues"
   },
   "author": "sqzw-x",
   "dsh": {

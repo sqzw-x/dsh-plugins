@@ -238,7 +238,7 @@ export function createHost(options = {}) {
   const context = vm.createContext(sandbox)
   vm.runInContext(SOURCE, context, { filename: 'lib/client.js' })
   if (!loaded) throw new Error('bundle did not register a module factory')
-  if (loaded.id !== 'dsh-alerts') throw new Error(`unexpected module id: ${loaded.id}`)
+  if (loaded.id !== 'dsh-focus-notify') throw new Error(`unexpected module id: ${loaded.id}`)
 
   const plugin = loaded.factory()
   // A real cordis Context, when the caller brings one: the fake below answers
@@ -256,7 +256,7 @@ export function createHost(options = {}) {
   // Registering through cordis is what applies `inject` and owns the teardown;
   // the fake context takes the plugin's own returned disposer instead.
   const fiber = options.context
-    ? ctx.plugin({ name: 'dsh-alerts', inject: plugin.inject, apply: plugin.apply })
+    ? ctx.plugin({ name: 'dsh-focus-notify', inject: plugin.inject, apply: plugin.apply })
     : null
   const dispose = fiber === null ? plugin.apply(ctx) : () => void fiber.dispose()
   // A cordis fiber activates on its own schedule, so `apply` may not have run
@@ -279,7 +279,7 @@ export function createHost(options = {}) {
     timeoutHandlers,
     intervalHandlers,
     get api() {
-      return sandbox.__dshAlerts
+      return sandbox.__dshFocusNotify
     },
     /** Resolves once the plugin is applied (a cordis fiber activates asynchronously). */
     ready: readiness,

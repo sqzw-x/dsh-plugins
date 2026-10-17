@@ -1,5 +1,5 @@
 /**
- * dsh-alerts — browser half (client plugin bundle).
+ * dsh-focus-notify — browser half (client plugin bundle).
  *
  * The bundle target is `window.__ModuleLoader__.load`, which is what the
  * Harness page's lazy-CJS module table calls; the wrapper around this module is
@@ -15,7 +15,9 @@ import { AlertEngine, type Alert, type AlertConfig, type PendingInteraction } fr
 import { VERSION } from './version.ts'
 
 /** Config key in `localStorage`. */
-const CONFIG_KEY = 'dshAlerts.config'
+const CONFIG_KEY = 'dshFocusNotify.config'
+/** Pre-rename key, read once so existing local settings survive the rename. */
+const LEGACY_CONFIG_KEY = 'dshAlerts.config'
 
 /**
  * Internal cadence constants. These are timing details of *how* the plugin
@@ -67,7 +69,7 @@ interface HostServices {
   openSession?: OpenSession
 }
 
-/** Runtime surface published as `window.__dshAlerts`. */
+/** Runtime surface published as `window.__dshFocusNotify`. */
 interface RuntimeApi {
   version: string
   configure(patch: Partial<AlertConfig> | null | undefined): AlertConfig
@@ -108,7 +110,7 @@ export function apply(ctx: Context): () => void {
   const run = (): (() => void) => start(scope)
   if (typeof scope.effect === 'function') {
     try {
-      return scope.effect(run, 'dsh-alerts: notification watchers')
+      return scope.effect(run, 'dsh-focus-notify: notification watchers')
     } catch {
       return run()
     }
@@ -229,7 +231,7 @@ function start(ctx: { get(name: string): unknown }): () => void {
   function openSession(sessionId: SessionId): boolean {
     const { source, open } = resolveNavigation()
     if (!open) {
-      console.warn('[dsh-alerts] this host publishes no navigation service (sessions.open / uiWorkspace.openSession)')
+      console.warn('[dsh-focus-notify] this host publishes no navigation service (sessions.open / uiWorkspace.openSession)')
       return false
     }
     try {
@@ -237,7 +239,7 @@ function start(ctx: { get(name: string): unknown }): () => void {
       return true
     } catch (error) {
       counters.failed += 1
-      console.warn(`[dsh-alerts] ${source} could not switch to session ${sessionId}:`, error)
+      console.warn(`[dsh-focus-notify] ${source} could not switch to session ${sessionId}:`, error)
       return false
     }
   }
@@ -308,7 +310,7 @@ function start(ctx: { get(name: string): unknown }): () => void {
 
   function notify(alert: Alert): void {
     try {
-      window.dispatchEvent(new CustomEvent('dsh-alerts:alert', { detail: alert }))
+      window.dispatchEvent(new CustomEvent('dsh-focus-notify:alert', { detail: alert }))
     } catch { /* the event is a convenience, not a contract */ }
   }
 
@@ -424,15 +426,15 @@ function start(ctx: { get(name: string): unknown }): () => void {
       return openSession(target) ? 'opened' : `not opened (navigation=${resolveNavigation().source}, see console)`
     }
   }
-  ;(window as unknown as { __dshAlerts?: RuntimeApi }).__dshAlerts = api
+  ;(window as unknown as { __dshFocusNotify?: RuntimeApi }).__dshFocusNotify = api
 
   return () => {
     disposed = true
     for (const dispose of disposers.splice(0)) {
       try { dispose() } catch { /* teardown must not throw */ }
     }
-    if ((window as unknown as { __dshAlerts?: RuntimeApi }).__dshAlerts === api) {
-      delete (window as unknown as { __dshAlerts?: RuntimeApi }).__dshAlerts
+    if ((window as unknown as { __dshFocusNotify?: RuntimeApi }).__dshFocusNotify === api) {
+      delete (window as unknown as { __dshFocusNotify?: RuntimeApi }).__dshFocusNotify
     }
     live.splice(0)
   }
@@ -442,7 +444,7 @@ function start(ctx: { get(name: string): unknown }): () => void {
 function readConfig(): AlertConfig {
   const stored: Partial<AlertConfig> = {}
   try {
-    const raw = window.localStorage?.getItem(CONFIG_KEY)
+    const raw = window.localStorage?.getItem(CONFIG_KEY) ?? window.localStorage?.getItem(LEGACY_CONFIG_KEY)
     if (raw) Object.assign(stored, JSON.parse(raw) as Partial<AlertConfig>)
   } catch { /* corrupt or unavailable storage falls back to defaults */ }
   return { ...DEFAULTS, ...sanitize(stored) }
@@ -464,6 +466,7 @@ function sanitize(patch: Partial<AlertConfig> | null | undefined): Partial<Alert
 function persist(): void {
   try {
     window.localStorage?.setItem(CONFIG_KEY, JSON.stringify(readConfig()))
+    window.localStorage?.removeItem(LEGACY_CONFIG_KEY)
   } catch { /* storage is optional */ }
 }
 

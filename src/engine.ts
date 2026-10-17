@@ -287,7 +287,7 @@ export class AlertEngine {
     return this.waitAlert(sessionId, pending ?? { key: 'test', kind: 'approval', sessionId })
   }
 
-  /** Live state for `window.__dshAlerts.debug()`. */
+  /** Live state for `window.__dshFocusNotify.debug()`. */
   snapshot(): EngineSnapshot {
     return {
       currentSession: this.currentId,
@@ -315,7 +315,7 @@ export class AlertEngine {
       sessionId,
       title: copy.waitTitle,
       body: `${this.label(sessionId)} · ${what}`,
-      tag: `dsh-alerts:${sessionId}`
+      tag: `dsh-focus-notify:${sessionId}`
     }
   }
 
@@ -326,7 +326,7 @@ export class AlertEngine {
       sessionId,
       title: copy.doneTitle,
       body: `${this.label(sessionId)} · ${copy.doneBody}`,
-      tag: `dsh-alerts:${sessionId}`
+      tag: `dsh-focus-notify:${sessionId}`
     }
   }
 

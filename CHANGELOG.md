@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0] — 2026-10-17
+
+### 变更
+
+- **包与仓库改名：`dsh-alerts` → `dsh-focus-notify`。** npm 上的 `dsh-alerts` 已被另一个项目占位，包名、仓库名、bundle id、Loader row 和 `cordis.patch.yml` 一并改名。
+- **运行时 API 同步改名**：`window.__dshAlerts` → `window.__dshFocusNotify`，DOM 事件 `dsh-alerts:alert` → `dsh-focus-notify:alert`，通知 tag 前缀 → `dsh-focus-notify:`。
+- **配置键迁移**：`localStorage` 的 `dshAlerts.config` → `dshFocusNotify.config`；首次读取会回退到旧键，旧配置不会丢。
+- **兼容声明**：`package.json` 增加 `engines.dsh: ">=0.2.0-rc.2 <0.2.1-0"`，插件市场和后续 DSH 版本据此显示/校验兼容性。
+
 ## [0.2.2] — 2026-10-11
 
 一轮针对"该响的没响 / 不该记的记着"的审查修复。没有 API 变化；`__dshAlerts` 表面保持兼容。

@@ -11,7 +11,7 @@ import { defineConfig } from 'tsdown'
  *  - `lib/engine.js` — the rules as a standalone ESM module, so they can be
  *    unit-tested (and reused) without a browser.
  */
-const ID = 'dsh-alerts'
+const ID = 'dsh-focus-notify'
 
 const banner = `window.__ModuleLoader__.load({
 \tid: ${JSON.stringify(ID)},

@@ -1,6 +1,6 @@
-# dsh-alerts
+# dsh-focus-notify
 
-[![CI](https://github.com/sqzw-x/dsh-alerts/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-alerts/actions/workflows/ci.yml)
+[![CI](https://github.com/sqzw-x/dsh-focus-notify/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-focus-notify/actions/workflows/ci.yml)
 
 English | [中文](README.md)
 
@@ -25,40 +25,40 @@ On macOS, `document.hidden` stays `false` while the window is merely covered by 
 ## Install
 
 ```sh
-dsh plugin --profile desktop add github:sqzw-x/dsh-alerts
+dsh plugin --profile desktop add github:sqzw-x/dsh-focus-notify
 ```
 
 From a local directory (development):
 
 ```sh
-dsh plugin --profile desktop add file:/absolute/path/to/dsh-alerts
+dsh plugin --profile desktop add file:/absolute/path/to/dsh-focus-notify
 ```
 
-Once the npm package is published, `dsh plugin --profile desktop add <npm package name>`
+Once the npm package is published, `dsh plugin --profile desktop add dsh-focus-notify`
 is the shorter path.
 
 Restart DSH Desktop afterwards; the client bundle is read when the page loads. Disable without uninstalling:
 
 ```yaml
-- id: dsh-alerts
+- id: dsh-focus-notify
   disabled: true
 ```
 
 ## Configure
 
 ```js
-__dshAlerts.configure({ sound: true })
-__dshAlerts.debug()
-__dshAlerts.test()
-__dshAlerts.open('session-id')   // switch conversations by id (defaults to the current one)
+__dshFocusNotify.configure({ sound: true })
+__dshFocusNotify.debug()
+__dshFocusNotify.test()
+__dshFocusNotify.open('session-id')   // switch conversations by id (defaults to the current one)
 ```
 
 Two `debug()` fields exist for "I clicked it and nothing happened":
 
 - `navigation` — which service a click will switch conversations through: `uiWorkspace.openSession` / `sessions.open` / `none`.
-- `counters.failed` — how many navigation calls threw; each one also logs a `[dsh-alerts] …` warning.
+- `counters.failed` — how many navigation calls threw; each one also logs a `[dsh-focus-notify] …` warning.
 
-Every posted notification also dispatches a `dsh-alerts:alert` event on `window` (`event.detail` is the alert: `kind` / `sessionId` / `title` / `body` / `tag`), which is where to hang your own reminder — a flashing taskbar, a different sound, a log line.
+Every posted notification also dispatches a `dsh-focus-notify:alert` event on `window` (`event.detail` is the alert: `kind` / `sessionId` / `title` / `body` / `tag`), which is where to hang your own reminder — a flashing taskbar, a different sound, a log line.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -80,7 +80,7 @@ Clicking a notification raises the window (the `dsh://open` deep link on the des
 - Works inside DSH Web / DSH Desktop pages only; `dsh-app://` pages cannot register a Service Worker, so notifications carry no buttons (this plugin needs none).
 - "The conversation on screen" is derived from `retainedBy.mainView`, which is a **reference count the main view holds** (upstream's own comment: "Local ownership counts, independent of catalog membership and never persisted"), read with the same predicate upstream `isMain()` uses. Where the host does not publish it, every conversation counts as "not current" (and therefore alerts).
 - Notification presentation is up to the platform (macOS: System Settings → Notifications → DeepSeek Harness).
-- A denied permission means no notifications; `__dshAlerts.debug().permission` reports `denied`.
+- A denied permission means no notifications; `__dshFocusNotify.debug().permission` reports `denied`.
 - **Completions are detected from the `running` edge, not from the SDK's `completionUnread`.** The latter is the sidebar's unread dot: upstream clears it while the main view holds the session and as soon as `running` turns true, so using it as the "reply finished" signal would silently stop background-completion alerts. The trade-off is that a reply finishing before the client ever observes `running === true` (say, across a page reload) does not alert.
 - `dsh.compatibility.dshReleases` in `package.json` is **informational only**: nothing in DSH 0.2.0-rc.2 reads it. The real gate is `peerDependencies` on `@deepseek-ai/dsh*` — this package declares `@deepseek-ai/cordis`, whose prefix is not checked, so that peer is inert, exactly as in upstream packages like `dsh-client-ui-session`.
 

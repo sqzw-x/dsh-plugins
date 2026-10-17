@@ -96,7 +96,7 @@ test('真实 cordis 宿主：点击通知把会话切到 uiWorkspace 上（接�
   host.dispose()
 })
 
-test('真实 cordis 宿主：__dshAlerts.open() 走同一条路', async () => {
+test('真实 cordis 宿主：__dshFocusNotify.open() 走同一条路', async () => {
   const { opened, host } = await realHost()
   assert.equal(host.api.open('s-other'), 'opened')
   assert.equal(host.api.open('s-current'), 'opened')

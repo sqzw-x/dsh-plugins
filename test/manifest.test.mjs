@@ -13,7 +13,7 @@ const read = (path) => readFileSync(fileURLToPath(new URL(path, root)), 'utf8')
 const pkg = JSON.parse(read('package.json'))
 
 test('包名、版本与运行时报告的版本一致', () => {
-  assert.equal(pkg.name, 'dsh-alerts')
+  assert.equal(pkg.name, 'dsh-focus-notify')
   const version = /export const VERSION = '([^']+)'/.exec(read('src/version.ts'))?.[1]
   assert.equal(version, pkg.version, 'src/version.ts 要与 package.json 同步（release 检查）')
 })
@@ -21,8 +21,8 @@ test('包名、版本与运行时报告的版本一致', () => {
 test('bundle 补丁存在，且插入的就是本插件的条目', () => {
   const patch = read('cordis.patch.yml')
   assert.match(patch, /insert:/)
-  assert.match(patch, /id: dsh-alerts/)
-  assert.match(patch, /name: 'dsh-alerts'/)
+  assert.match(patch, /id: dsh-focus-notify/)
+  assert.match(patch, /name: 'dsh-focus-notify'/)
   assert.equal(pkg.dsh?.bundle?.patch, './cordis.patch.yml')
 })
 
@@ -42,7 +42,7 @@ test('客户端声明：web 平台、声明注入的宿主包、入口指向构�
 test('构建产物是 __ModuleLoader__ 的懒执行工厂', () => {
   const bundle = read('lib/client.js')
   assert.match(bundle, /^window\.__ModuleLoader__\.load\(\{/)
-  assert.match(bundle, /id: "dsh-alerts"/)
+  assert.match(bundle, /id: "dsh-focus-notify"/)
   assert.match(bundle, /factory: \(require\) => \{/)
   assert.match(bundle, /exports\.apply = apply;/)
   assert.match(bundle, /exports\.inject = inject;/)
