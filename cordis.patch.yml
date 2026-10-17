@@ -1,0 +1,40 @@
+# dsh-lan-link bundle layer — inserts the loader entry for this package.
+#
+# The row mounts a host plugin that waits for the web server to bind, then
+# writes this process's authenticated launch links to <harness home>/lan-link.txt
+# (mode 0600) and registers DSH_LAN_LINK in the shell environment.
+#
+# With `gateway.enabled: true` it also serves those devices directly: a second
+# listener on this machine's network address that re-issues every request over
+# loopback as the host's own browser would — carrying the process's own session
+# cookie (so a device needs no launch token), rewriting Host/Origin past the
+# /api fence, and injecting two head scripts into the served document (the
+# randomUUID polyfill for non-secure contexts, and the host-claim flag that
+# makes the client render the full host surface). Everything that reaches that
+# port is treated as this machine's user — read lib/gateway.js before enabling
+# it, and keep allowCidrs to the network you own.
+#
+# It declares no `inject`, so the entry activates immediately and resolves
+# `webServer`, `connection` and `shellEnv` lazily: a missing service can never
+# leave this row pending or failed and take the browser boot down with it.
+#
+# Disable without uninstalling:
+#   - id: lan-link
+#     disabled: true
+- insert:
+    - id: lan-link
+      name: 'dsh-lan-link'
+      # config:
+      #   fileName: 'lan-link.txt'   # relative to the harness home
+      #   intervalMs: 1000           # re-check cadence for port/address changes
+      #   gateway:                   # optional LAN gateway (default: off)
+      #     enabled: true
+      #     listenHost: '0.0.0.0'    # interface to bind; 0.0.0.0 = every interface
+      #     listenPort: 3081         # port devices open; 0 = OS-assigned
+      #     allowCidrs:              # clients admitted besides loopback
+      #       - '192.168.0.0/24'     # keep this to a network you own
+      #     allowLoopback: true      # admit this machine (default true)
+      #     username: ''             # optional Basic Auth (needs both fields)
+      #     password: ''
+      #     injectHostClaim: true    # full host surface (default true); false = remote-visitor mode
+      #     verifySeam: true         # warn when the harness drops the host-claim seam
