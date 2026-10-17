@@ -8,6 +8,7 @@
 - **运行时 API 同步改名**：`window.__dshAlerts` → `window.__dshFocusNotify`，DOM 事件 `dsh-alerts:alert` → `dsh-focus-notify:alert`，通知 tag 前缀 → `dsh-focus-notify:`。
 - **配置键迁移**：`localStorage` 的 `dshAlerts.config` → `dshFocusNotify.config`；首次读取会回退到旧键，旧配置不会丢。
 - **兼容声明**：`package.json` 增加 `engines.dsh: ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.3.0-0"`，覆盖已在 0.2.1-rc.2 上实测的版本；插件市场和后续 DSH 版本据此显示/校验兼容性。
+- **发布工具**：`npm version` 现在通过 `scripts/sync-version.mjs` 自动同步 `src/version.ts`，避免版本漂移。
 
 ## [0.2.2] — 2026-10-11
 

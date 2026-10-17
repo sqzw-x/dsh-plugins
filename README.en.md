@@ -104,7 +104,7 @@ Releases use npm **Trusted Publishing** (OIDC); the workflow needs no long-lived
    - Repository: `dsh-focus-notify`
    - Workflow filename: `publish.yml`
    - Allowed actions: enable **npm publish** (`npm stage publish` is always allowed)
-3. After that, push a `v*` tag matching the `package.json` version; `.github/workflows/publish.yml` publishes over OIDC. A new configuration must complete one successful publish within **2 days** or it expires; if 0.3.0 was published manually, `npm version patch` to 0.3.1 and tag that.
+3. After that, push a `v*` tag matching the `package.json` version; `.github/workflows/publish.yml` publishes over OIDC. A new configuration must complete one successful publish within **2 days** or it expires; if 0.3.0 was published manually, `npm version patch` to 0.3.1 and tag that (`npm version` also syncs `src/version.ts`).
 4. Once verified, delete any `NPM_TOKEN` and set the package's Publishing access to “Require two-factor authentication and disallow tokens”.
 
 ```sh

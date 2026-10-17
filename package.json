@@ -56,6 +56,7 @@
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck",
     "test": "npm run build && node --test test/*.test.mjs",
+    "version": "node scripts/sync-version.mjs && git add src/version.ts",
     "prepack": "npm run build"
   },
   "publishConfig": {

@@ -128,7 +128,7 @@ npm test           # 构建 + node --test
    - Repository: `dsh-focus-notify`
    - Workflow filename: `publish.yml`
    - Allowed actions: 勾选 **npm publish**（`npm stage publish` 默认允许）
-3. 之后打 `v*` 标签即可由 `.github/workflows/publish.yml` 经 OIDC 发布；标签版本须与 `package.json` 一致。新配置要在 **2 天内完成一次成功发布**，否则过期；若 0.3.0 已手动发过，先 `npm version patch` 到 0.3.1 再打标签。
+3. 之后打 `v*` 标签即可由 `.github/workflows/publish.yml` 经 OIDC 发布；标签版本须与 `package.json` 一致。新配置要在 **2 天内完成一次成功发布**，否则过期；若 0.3.0 已手动发过，先 `npm version patch` 到 0.3.1 再打标签（`npm version` 会通过 `version` 脚本同步 `src/version.ts`）。
 4. 验证通过后删掉 `NPM_TOKEN`，并在包的 Publishing access 里选 “Require two-factor authentication and disallow tokens”。
 
 ```sh
