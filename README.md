@@ -28,16 +28,13 @@ macOS 上窗口被别的应用盖住时，`document.hidden` 仍然是 `false` �
 
 ### 插件管理器
 
-在「设置 → 插件」里安装本包的目录（或已发布的 `dsh-alerts`），启用后重启 DSH Desktop。
+在「设置 → 插件」里安装本包的目录，启用后重启 DSH Desktop。
 
 ### 命令行
 
 ```sh
-# 1) 装进 profile（desktop 换成你要用的 profile 名）
-dsh plugin --profile desktop add dsh-alerts
-
-# 2) 让 profile 组合带上这个 bundle：在
-#    ~/.dsh/profiles/desktop/package.json 的 dsh.profile.bundles 里加上 "dsh-alerts"
+# 从 GitHub 安装
+dsh plugin --profile desktop add github:sqzw-x/dsh-alerts
 ```
 
 从本地目录安装（开发时）：
@@ -45,6 +42,8 @@ dsh plugin --profile desktop add dsh-alerts
 ```sh
 dsh plugin --profile desktop add file:/absolute/path/to/dsh-alerts
 ```
+
+npm 包发布后，可以改用 `dsh plugin --profile desktop add <npm 包名>`。
 
 装完**重启 DSH Desktop**：客户端 bundle 在页面加载时读取。停用而不卸载：在 profile 的 `cordis.patch.yml` 里写
 
@@ -118,6 +117,15 @@ npm test           # 构建 + node --test
 ```
 
 `lib/client.js` 是浏览器产物，包在 `window.__ModuleLoader__.load({ id, factory })` 里（与官方 `ui-*` bundle 同形），包装由 `tsdown.config.ts` 的 banner/footer 生成。测试分四层：`test/engine.test.mjs` 打规则表，`test/client.test.mjs` 把构建产物放进 vm、按真实宿主的样子造服务实例来加载，`test/host.test.mjs` 把同一个产物当真正的 cordis 插件挂在真 `Context` 上跑，`test/manifest.test.mjs` 盯清单与产物契约。上面说的"只在 Desktop 实测过"指的是真实使用，不是这些测试覆盖了什么。
+
+## 发布
+
+发布前确认 `package.json` 里的包名在 npm 上归本账号所有。在仓库 Settings → Secrets and variables → Actions 配置 `NPM_TOKEN`（npm granular access token，勾选 read/write 包权限），然后给当前 `package.json` 版本打 `v*` 标签触发 `.github/workflows/publish.yml`；标签版本须与 `package.json` 一致。
+
+```sh
+git tag "v$(node -pe 'require("./package.json").version')"
+git push origin --tags
+```
 
 ## License
 

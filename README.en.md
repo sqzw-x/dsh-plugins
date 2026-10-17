@@ -25,9 +25,17 @@ On macOS, `document.hidden` stays `false` while the window is merely covered by 
 ## Install
 
 ```sh
-dsh plugin --profile desktop add dsh-alerts
-# then add "dsh-alerts" to dsh.profile.bundles in the profile's package.json
+dsh plugin --profile desktop add github:sqzw-x/dsh-alerts
 ```
+
+From a local directory (development):
+
+```sh
+dsh plugin --profile desktop add file:/absolute/path/to/dsh-alerts
+```
+
+Once the npm package is published, `dsh plugin --profile desktop add <npm package name>`
+is the shorter path.
 
 Restart DSH Desktop afterwards; the client bundle is read when the page loads. Disable without uninstalling:
 
@@ -85,6 +93,18 @@ npm install && npm test
 ```
 
 Four test layers: `test/engine.test.mjs` exercises the rule table, `test/client.test.mjs` loads the built bundle in a vm the way the host does (against a host double shaped like the real one), `test/host.test.mjs` mounts the same bundle as a real cordis fiber on a real `Context`, and `test/manifest.test.mjs` guards the manifest and artifact contract. The rule table is what the tests run against; **the Desktop-only status above is about real-world use, not about what is covered here**.
+
+## Publishing
+
+Confirm that the package name in `package.json` belongs to this account on npm. Add an
+`NPM_TOKEN` secret (an npm granular access token with read/write package permission) under
+Settings → Secrets and variables → Actions, then tag the current `package.json` version
+with `v*` to run `.github/workflows/publish.yml`; the tag must match the package version.
+
+```sh
+git tag "v$(node -pe 'require("./package.json").version')"
+git push origin --tags
+```
 
 ## License
 
