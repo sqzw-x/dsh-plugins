@@ -1,5 +1,9 @@
 # dsh-lan-link
 
+[![CI](https://github.com/sqzw-x/dsh-lan-link/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-lan-link/actions/workflows/ci.yml)
+
+[English](README.en.md) | 简体中文
+
 把**当前这个 harness 进程**的局域网访问交给别的设备：一条是落盘的、带 launch token 的启动链接，另一条（可选）是本进程自己在局域网端口上对外服务的**网关**。
 
 ## 两种链接的区别
@@ -82,15 +86,31 @@ http://192.168.0.2:19387/?token=…
 
 每次 harness 启动覆盖一次；端口、网卡地址或网关状态变化时会重写。`DSH_LAN_LINK` 优先给网关链接。
 
-## 安装（desktop profile）
+## 安装
+
+### 插件管理器
+
+在「设置 → 插件」里装上 `dsh-lan-link`，启用后按提示重启。桌面版与 Web 版都适用。
+
+### 命令行
+
+```sh
+# 从 npm
+dsh plugin --profile <profile> add dsh-lan-link
+
+# 从 GitHub
+dsh plugin --profile <profile> add github:sqzw-x/dsh-lan-link
+```
+
+### desktop profile（Electron 独占）
 
 ```jsonc
 // ~/.dsh/profiles/desktop/package.json
-"dependencies": { "dsh-lan-link": "link:/Users/srz/projects/dsh-plugins/packages/dsh-lan-link" },
+"dependencies": { "dsh-lan-link": "^0.2.0" },
 "dsh": { "profile": { "bundles": [ …, "dsh-lan-link" ] } }
 ```
 
-然后在 profile 目录跑一次 `pnpm install`（或用 app 的插件管理器），重启 app 生效。
+然后在 profile 目录跑一次 `pnpm install`（或用 app 的插件管理器），重启 app 生效。开发时把依赖换成 `link:/path/to/dsh-lan-link` 即可。
 
 > 注意：desktop profile 由 Electron 独占管理，`dsh plugin --profile desktop …` 会被拒绝（`profile "desktop" is managed exclusively by the Electron application`），只能直接改 profile 目录。
 
