@@ -2,6 +2,11 @@
 
 本文件记录 `dsh-lan-link` 的对外变更。0.2.0 是首个公开发布（GitHub 与 npm 同步）。
 
+## 0.2.1 — 2026-10-21
+
+- 无功能变更：产物与 0.2.0 相同，用于验证 `v*` 标签触发的 GitHub Actions +
+  npm Trusted Publishing（OIDC，`--provenance`）发布链路。
+
 ## 0.2.0 — 2026-10-18
 
 ### Added
