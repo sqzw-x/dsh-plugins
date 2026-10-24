@@ -13,7 +13,7 @@
 | `packages/dsh-notes-context` | 笔记式上下文压缩（host） |
 | `packages/dsh-prompt-sections` | 系统提示词段落编辑器（host + Web UI） |
 | `tooling/dsh-plugin-toolkit` | 构建预设 `pluginBuild()`、测试替身、产物契约 |
-| `.agents/skills/` | agent 技能（vendored，见其中 README） |
+| `.agents/skills/` | agent 技能目录（不 vendored，见其中 README） |
 
 ## 常用命令
 

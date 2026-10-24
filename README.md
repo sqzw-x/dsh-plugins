@@ -29,7 +29,7 @@ dsh plugin --profile web add link:$PWD/packages/dsh-prompt-sections
 packages/             每个目录是一个独立发布的 npm 包
 tooling/              仅本仓库使用的开发工具（不发布）
   dsh-plugin-toolkit    构建预设 + 测试替身 + 产物契约
-.agents/skills/       agent 用的开发 skill（vendored，见该目录 README）
+.agents/skills/       agent 用的开发 skill（不 vendored，见该目录 README）
 .github/workflows/    CI 与发布
 .changeset/           版本与 changelog 的唯一入口
 ```

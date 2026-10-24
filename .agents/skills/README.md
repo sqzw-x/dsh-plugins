@@ -1,20 +1,9 @@
-# Vendored skills
+# Agent skills
 
-这里放**随仓库分发**的 agent 技能，内容是上游项目的原样拷贝，纳入本仓库版本管理，方便任何 checkout 都能直接使用。
+本仓库**不**随仓库分发（vendor）agent 技能。
 
-| 技能 | 上游 | 当前版本 | 同步方式 |
-|---|---|---|---|
-| `dsh-plugin-dev-skill` | https://github.com/green-dalii/dsh-plugin-dev-skill | `0.6.3`（见其 `VERSION`） | `pnpm sync-skill` |
+- 插件开发用宿主自带的那一套：DSH 每次安装都带 `cordis-plugin-development`（以及 `cordis-composition-reference`、`editing-cordis-compositions`），它和运行时同版本，不需要手动同步。
+- 之前 vendored 的第三方技能 `dsh-plugin-dev-skill` 已删除（提交 `a16d60f`）。内容仍在 git 历史里，需要时用
+  `git show a16d60f^:.agents/skills/dsh-plugin-dev-skill/SKILL.md` 取；配套的 `scripts/sync-skill.sh` 与 `pnpm sync-skill` 一并移除。
 
-## 为什么是 vendored 而不是 submodule
-
-DSH 从 `<仓库>/.agents/skills/<name>/SKILL.md` 读取技能。submodule 在未初始化的 checkout 里是一个空目录，技能会**静默消失**；vendored 拷贝则永远在。代价是升级要显式同步一次，这不是问题：上游发版频率低，而且 `scripts/sync-skill.sh` 会把差异打出来。
-
-## 升级
-
-```sh
-pnpm sync-skill              # 拉取上游最新 tag 并覆盖本地拷贝
-pnpm sync-skill --check      # 只比较，不写入
-```
-
-覆盖后请一并更新本文件的版本号与 `dsh-plugins/AGENTS.md` 里引用的内容（技能里若改了 DSH 基线，要同步 `pnpm-workspace.yaml` 的 catalog）。
+如果将来还要 vendored 某个技能，请在本文件记下：上游仓库、当前版本、同步命令，以及**为什么不能直接用宿主自带的技能**。

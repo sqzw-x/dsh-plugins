@@ -23,7 +23,6 @@
     "changeset": "changeset",
     "version-packages": "changeset version && pnpm install --lockfile-only",
     "release": "pnpm build && changeset publish",
-    "sync-skill": "bash scripts/sync-skill.sh",
     "assert:bundles": "node scripts/assert-bundles.mjs"
   },
   "devDependencies": {
