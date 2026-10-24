@@ -56,6 +56,12 @@ pnpm changeset          # 选择受影响的包与 bump 级别，写一条变更
 - 合并那个 PR 时发布到 npm，并打 `包名@版本` 标签（例如 `dsh-notes-context@0.2.2`）；
 - 发布走 npm Trusted Publishing（OIDC），不需要 `NPM_TOKEN`；新增包要先把 `sqzw-x/dsh-plugins` + `.github/workflows/publish.yml` 绑定到该包的 trusted publisher 上。
 
+## 仓库历史
+
+三个原本独立发布的插件（`dsh-focus-notify`、`dsh-lan-link`、`dsh-notes-context`）通过 `git subtree add` 并入本仓库：**原始提交仍然是祖先**，`git log` 可以看到全部历史；但按路径追溯时，路径归属从导入提交开始（`git log -- <path>` 不会穿透到导入前）。按内容回溯用 `git log -S<字符串> --all` 不受影响。
+
+独立仓库将保留为存档并指向这里；npm 上的包名、版本号与安装命令不变。
+
 ## 兼容性
 
 所有包以 `@deepseek-ai/*` **0.2.1-rc.2** 为构建与测试基线（见 `pnpm-workspace.yaml` 的 catalog）。升级 DSH 时改 catalog 一处，全仓库一起升级、一起验证。
