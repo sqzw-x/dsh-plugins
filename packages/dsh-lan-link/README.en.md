@@ -133,8 +133,8 @@ curl -s -o /dev/null -w '%{http_code}\n' http://192.168.0.2:3081/     # expect 2
 End-to-end smoke against a live harness (the process must be running):
 
 ```sh
-node scripts/live-smoke.mjs                    # reads the token from ~/.dsh/lan-link.txt
-node scripts/live-smoke.mjs --port 3081 --host 192.168.0.2
+node scripts/live-smoke.ts                    # reads the token from ~/.dsh/lan-link.txt
+node scripts/live-smoke.ts --port 3081 --host 192.168.0.2
 ```
 
 It checks that anonymous access returns 200 with both scripts injected, that the client bundle is byte-identical to the direct one, the host-claim seam probe, and that the `/api/remote.mux` WebSocket upgrade goes through.

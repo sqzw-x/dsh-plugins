@@ -10,9 +10,9 @@
  * package's publisher writes.
  *
  * Usage:
- *   node scripts/live-smoke.mjs
- *   node scripts/live-smoke.mjs --host 192.168.0.2 --port 3081
- *   node scripts/live-smoke.mjs --harness-port 50908 --token <launch token>
+ *   node scripts/live-smoke.ts
+ *   node scripts/live-smoke.ts --host 192.168.0.2 --port 3081
+ *   node scripts/live-smoke.ts --harness-port 50908 --token <launch token>
  */
 import { readFileSync } from 'node:fs'
 import { homedir, networkInterfaces } from 'node:os'

@@ -10,7 +10,7 @@
  * failure can only be observed out of process, hence this fixture: it exits 0
  * only when the gateway survived *and* still serves requests afterwards.
  *
- * Run: node test/fixtures/upgrade-reset.mjs
+ * Run: node test/fixtures/upgrade-reset.ts
  */
 import http from 'node:http'
 import net from 'node:net'

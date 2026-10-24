@@ -41,5 +41,5 @@ jobs:
       - name: Bundle contracts and package contents
         if: matrix.node == 24
         run: |
-          node scripts/assert-bundles.mjs
+          node scripts/assert-bundles.ts
           pnpm pack:dry

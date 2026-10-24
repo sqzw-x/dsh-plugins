@@ -2,12 +2,12 @@
  * Bundle-level tests: the built `lib/client.js` loaded through
  * `window.__ModuleLoader__.load`, driven against a fake host.
  *
- * The decision table itself is covered by `engine.test.mjs`; what these verify
+ * The decision table itself is covered by `engine.test.ts`; what these verify
  * is the contract with the Harness page and the wiring around the engine.
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { FakeNotification, createHost, currentRow, row } from './harness.mjs'
+import { FakeNotification, createHost, currentRow, row } from './harness.ts'
 
 /** A host with one conversation on screen, one in the background, one subagent. */
 function makeHost(options = {}) {

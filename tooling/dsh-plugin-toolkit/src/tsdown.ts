@@ -16,13 +16,14 @@
  *
  * @module dsh-plugin-toolkit/tsdown
  */
+import type { UserConfig } from 'tsdown'
 
 /**
  * Banner opening the lazy-CJS factory that owns the client module.
- * @param {string} id - module id, which must equal the npm package name.
- * @returns {string} the banner text.
+ * @param id - module id, which must equal the npm package name.
+ * @returns the banner text.
  */
-function clientBanner(id) {
+function clientBanner(id: string): string {
   return `window.__ModuleLoader__.load({
 \tid: ${JSON.stringify(id)},
 \tfactory: (require) => {
@@ -34,21 +35,29 @@ const CLIENT_FOOTER = `\t\treturn module.exports;
 \t}
 });`
 
+/** Options for {@link pluginBuild}. */
+export interface PluginBuildOptions {
+  /** The client module id; must equal the package name. */
+  id: string
+  /** Emit `lib/client.js` (default: true). */
+  client?: boolean
+  /** Emit host type declarations (default: true). */
+  dts?: boolean
+  /** Wipe `lib/` before the host entry builds (default: true). */
+  clean?: boolean
+  /** Additional host-side entries merged over the same external/no-bundle defaults. */
+  extraEntries?: UserConfig[]
+}
+
 /**
  * Build configuration for one plugin package.
  *
- * @param {object} options - what to build.
- * @param {string} options.id - the client module id; must equal the package name.
- * @param {boolean} [options.client] - emit `lib/client.js` (default: true).
- * @param {boolean} [options.dts] - emit host type declarations (default: true).
- * @param {boolean} [options.clean] - wipe `lib/` before the host entry builds (default: true).
- * @param {Array<object>} [options.extraEntries] - additional host-side entries (for example a
- *   standalone rules module) merged over the same external/no-bundle defaults.
- * @returns {import('tsdown').UserConfig[]} the tsdown config array.
+ * @param options - what to build.
+ * @returns the tsdown config array.
  */
-export function pluginBuild({ id, client = true, dts = true, clean = true, extraEntries = [] }) {
+export function pluginBuild({ id, client = true, dts = true, clean = true, extraEntries = [] }: PluginBuildOptions): UserConfig[] {
   if (typeof id !== 'string' || id.trim() === '') throw new Error('pluginBuild: `id` must be the package name')
-  const configs = [
+  const configs: UserConfig[] = [
     {
       entry: { index: 'src/index.ts' },
       outDir: 'lib',

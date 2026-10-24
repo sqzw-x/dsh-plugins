@@ -19,7 +19,7 @@ dsh plugin --profile notes-test add /abs/path/to/packages/dsh-notes-context
 - `acceptance-patch.yml` — points the test profile at a working provider and
   sets a deliberately tiny compaction threshold so rollovers are cheap.
   Edit the provider block for your own credentials (`apiKeyEnv`).
-- `dump-request.mjs` — an `llm/stream` observer that prints every outgoing
+- `dump-request.ts` — an `llm/stream` observer that prints every outgoing
   request's roles, source kinds and content previews to stderr. This is what
   proved the notebook lands *after* its tool result; a log-only check cannot see
   message ordering. It is also what caught the 400-producing sequence.

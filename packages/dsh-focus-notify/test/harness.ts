@@ -3,7 +3,7 @@
  * does — through `window.__ModuleLoader__.load` inside a vm context — and hands
  * the test a fake host with the two stores this plugin watches.
  *
- * The rules themselves are covered by `engine.test.mjs` against the typed
+ * The rules themselves are covered by `engine.test.ts` against the typed
  * engine; these helpers exist to prove the bundle contract and the wiring
  * (subscriptions, focus handling, click-to-open, teardown).
  */

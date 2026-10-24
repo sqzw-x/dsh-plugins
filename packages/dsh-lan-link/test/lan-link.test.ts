@@ -3,7 +3,7 @@
  * port, must write once per real change (port or address set), and must stay
  * owner-only.
  *
- * Run: node --test test/lan-link.test.mjs
+ * Run: node --test test/lan-link.test.ts
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'

@@ -131,8 +131,8 @@ curl -s -o /dev/null -w '%{http_code}\n' http://192.168.0.2:3081/     # 期望 2
 带真实 harness 的端到端冒烟（当前进程必须正在运行）：
 
 ```sh
-node scripts/live-smoke.mjs                    # 读 ~/.dsh/lan-link.txt 里的 token
-node scripts/live-smoke.mjs --port 3081 --host 192.168.0.2
+node scripts/live-smoke.ts                    # 读 ~/.dsh/lan-link.txt 里的 token
+node scripts/live-smoke.ts --port 3081 --host 192.168.0.2
 ```
 
 它会检查：匿名访问返回 200 且两段脚本已注入、客户端 bundle 与直连逐字节一致、host-claim 缝隙探测、以及 `/api/remote.mux` 的 WebSocket 升级能打通。

@@ -6,9 +6,18 @@
   "description": "Shared build and test plumbing for the plugins in this repository: one tsdown preset, one set of harness test doubles.",
   "license": "MIT",
   "exports": {
-    ".": "./src/index.mjs",
-    "./tsdown": "./src/tsdown.mjs",
-    "./test": "./src/test.mjs"
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./tsdown": {
+      "types": "./src/tsdown.ts",
+      "default": "./src/tsdown.ts"
+    },
+    "./test": {
+      "types": "./src/test.ts",
+      "default": "./src/test.ts"
+    }
   },
   "files": [
     "src"
@@ -32,6 +41,12 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "catalog:",
     "@deepseek-ai/dsh-system-prompt": "catalog:",
-    "tsdown": "catalog:"
+    "@types/node": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck"
   }
 }

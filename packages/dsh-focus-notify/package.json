@@ -52,10 +52,10 @@
     "dsh": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.3.0-0"
   },
   "scripts": {
-    "build": "node scripts/sync-version.mjs && tsdown",
+    "build": "node scripts/sync-version.ts && tsdown",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck",
-    "test": "npm run build && node --test test/*.test.mjs",
+    "test": "npm run build && node --test test/*.test.ts",
     "prepack": "npm run build",
     "verify": "npm run typecheck && npm run test"
   },

@@ -46,8 +46,8 @@
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck",
-    "test": "npm run build && node --test test/*.test.mjs",
-    "smoke": "npm run build && node scripts/live-smoke.mjs",
+    "test": "npm run build && node --test test/*.test.ts",
+    "smoke": "npm run build && node scripts/live-smoke.ts",
     "prepack": "npm run build",
     "verify": "npm run typecheck && npm run test"
   },

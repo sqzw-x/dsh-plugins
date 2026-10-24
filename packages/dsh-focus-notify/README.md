@@ -116,7 +116,7 @@ npm run typecheck  # tsc --noEmit
 npm test           # 构建 + node --test
 ```
 
-`lib/client.js` 是浏览器产物，包在 `window.__ModuleLoader__.load({ id, factory })` 里（与官方 `ui-*` bundle 同形），包装由 `tsdown.config.ts` 的 banner/footer 生成。测试分四层：`test/engine.test.mjs` 打规则表，`test/client.test.mjs` 把构建产物放进 vm、按真实宿主的样子造服务实例来加载，`test/host.test.mjs` 把同一个产物当真正的 cordis 插件挂在真 `Context` 上跑，`test/manifest.test.mjs` 盯清单与产物契约。上面说的"只在 Desktop 实测过"指的是真实使用，不是这些测试覆盖了什么。
+`lib/client.js` 是浏览器产物，包在 `window.__ModuleLoader__.load({ id, factory })` 里（与官方 `ui-*` bundle 同形），包装由 `tsdown.config.ts` 的 banner/footer 生成。测试分四层：`test/engine.test.ts` 打规则表，`test/client.test.ts` 把构建产物放进 vm、按真实宿主的样子造服务实例来加载，`test/host.test.ts` 把同一个产物当真正的 cordis 插件挂在真 `Context` 上跑，`test/manifest.test.ts` 盯清单与产物契约。上面说的"只在 Desktop 实测过"指的是真实使用，不是这些测试覆盖了什么。
 
 ## 发布
 

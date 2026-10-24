@@ -92,7 +92,7 @@ Node 22.18+ (toolchain only: tsdown requires `^22.18.0 || ^24.11.0 || >=26.0.0` 
 npm install && npm test
 ```
 
-Four test layers: `test/engine.test.mjs` exercises the rule table, `test/client.test.mjs` loads the built bundle in a vm the way the host does (against a host double shaped like the real one), `test/host.test.mjs` mounts the same bundle as a real cordis fiber on a real `Context`, and `test/manifest.test.mjs` guards the manifest and artifact contract. The rule table is what the tests run against; **the Desktop-only status above is about real-world use, not about what is covered here**.
+Four test layers: `test/engine.test.ts` exercises the rule table, `test/client.test.ts` loads the built bundle in a vm the way the host does (against a host double shaped like the real one), `test/host.test.ts` mounts the same bundle as a real cordis fiber on a real `Context`, and `test/manifest.test.ts` guards the manifest and artifact contract. The rule table is what the tests run against; **the Desktop-only status above is about real-world use, not about what is covered here**.
 
 ## Publishing
 

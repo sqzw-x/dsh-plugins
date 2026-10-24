@@ -1,7 +1,7 @@
 /**
  * Integration against a **real cordis Context**.
  *
- * `client.test.mjs` drives the bundle with a hand-written context stub. That is
+ * `client.test.ts` drives the bundle with a hand-written context stub. That is
  * fast and precise, but the stub answers `get()` from a plain map — it cannot
  * say anything about how the framework resolves a service the plugin never
  * declared in `inject`, nor about a plugin registered as a fiber.
@@ -15,7 +15,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Context, Service } from '@deepseek-ai/cordis'
-import { createHost, currentRow, row } from './harness.mjs'
+import { createHost, currentRow, row } from './harness.ts'
 
 /** Stand-in for `ui-session`, whose `sessionStatus` store the engine watches. */
 class UiSessionService extends Service {

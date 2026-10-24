@@ -7,7 +7,7 @@
  * handshake intact, and survive a device that resets its tunnel instead of
  * closing it.
  *
- * Run: node --test test/gateway.test.mjs
+ * Run: node --test test/gateway.test.ts
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -28,7 +28,7 @@ import {
 } from '../lib/gateway.js'
 
 /** Fixture that resets a live tunnel; it has to run out of process (see below). */
-const RESET_FIXTURE = fileURLToPath(new URL('./fixtures/upgrade-reset.mjs', import.meta.url))
+const RESET_FIXTURE = fileURLToPath(new URL('./fixtures/upgrade-reset.ts', import.meta.url))
 
 /** Cookie the fake harness mints and then expects back on every request. */
 const SESSION_COOKIE = 'dsh-auth-test=SESSION'

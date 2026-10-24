@@ -8,7 +8,7 @@
  *
  * @module dsh-plugin-toolkit
  */
-export { pluginBuild } from './tsdown.mjs'
+export { pluginBuild } from './tsdown.ts'
 export {
   FakeWebServer,
   assertClientBundle,
@@ -18,4 +18,4 @@ export {
   makeResponse,
   mountPromptRegistry,
   tick,
-} from './test.mjs'
+} from './test.ts'
