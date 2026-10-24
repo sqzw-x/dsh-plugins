@@ -1,6 +1,6 @@
 {
   "name": "dsh-lan-link",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Give this harness process LAN access: publish its authenticated launch links to <harness home>/lan-link.txt (and DSH_LAN_LINK), and optionally serve devices directly on a fixed LAN port — the session is held locally, so a device needs no token.",
   "license": "MIT",
   "author": "sqzw-x",
