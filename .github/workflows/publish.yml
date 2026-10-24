@@ -9,8 +9,13 @@ name: Release
 #
 # Each package must have this repository + this workflow file bound as its npm
 # Trusted Publisher (`npm trust github <pkg> --repo sqzw-x/dsh-plugins --file
-# .github/workflows/publish.yml`); that binding is a manual, one-time step per
-# package and is intentionally not automated here.
+# publish.yml --allow-publish`); that binding is a manual, one-time step per
+# package and is intentionally not automated here. `--file` takes the bare
+# workflow filename, not a path.
+#
+# Trusted publishing cannot create a package's first version. Reserve a new
+# package with a tiny `0.0.0-stage` publish first, then add the binding above;
+# this workflow publishes the real version afterwards.
 on:
   push:
     branches: [main]

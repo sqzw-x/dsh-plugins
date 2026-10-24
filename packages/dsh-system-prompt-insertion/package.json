@@ -21,6 +21,7 @@
     "cordis.patch.yml",
     "locale",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "keywords": [
