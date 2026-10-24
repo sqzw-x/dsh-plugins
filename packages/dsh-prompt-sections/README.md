@@ -1,6 +1,6 @@
 # dsh-prompt-sections
 
-> 给 DeepSeek Harness 的 **system prompt** 加你自己的段落：写在设置页里，落到开头 / 中间 / 最末尾，改完下一个请求生效。
+> 给 DeepSeek Harness 的 **system prompt** 加你自己的段落：写在左侧栏的面板里，落到开头 / 中间 / 最末尾，改完下一个请求生效。
 
 [English](#english) | 简体中文
 
@@ -31,7 +31,7 @@ dsh plugin --profile web add link:~/projects/dsh-plugins/packages/dsh-prompt-sec
 dsh plugin --profile web add dsh-prompt-sections
 ```
 
-装完**重启一次 DSH**（新 bundle 需要宿主重新引导），然后打开 **设置 → 提示词段落**。
+装完**重启一次 DSH**（新 bundle 需要宿主重新引导），左侧栏底部会多出一个「提示词段落」图标（和 Plugins / 任务时间表 / 上下文档同一排），点开就是面板。以后改代码只需 `npm run build` 再刷新页面。
 
 ## 三个落点
 
@@ -51,13 +51,17 @@ dsh plugin --profile web add dsh-prompt-sections
 
 唯一的例外：预设把 persona 设成 `complete: true`（内置 `minimal` 就是），整份提示词只剩那一段，任何追加都会被丢弃。**预览会直接标注这种情况**，不会假装生效。
 
-## 设置页
+## 侧栏面板
 
-- 列表式编辑器：增删、改名、上下移动、逐段启停、逐段选位置。
-- 每段显示字节数与落点提示；正文为空会当场标黄（空段不会被注册）。
-- **保存 / 撤销**：改动先暂存在页面里，保存才落盘，不会把半句话写进正在跑的会话。
-- **预览当前系统提示词**：调用宿主真实的 `assemble()` + `renderPrompt()`，列出每一段的 order、字节数、哪些是本插件的，并给最后拼出来的全文。
+- 版式跟随宿主自己的全局页面（参考内置「任务时间表」页）：960px 内容列居中、两侧留白随窗口 `clamp(24px, 4vw, 48px)` 自适应、标题 20px/500，macOS 下会额外让开窗口顶部 48px。
+- **单栏**：标题 → 段落列表 → 预览自上而下排。编辑区和预览都占满内容列宽，长正文不再被挤在右半边；窄窗口不需要任何重排。
+- **常驻保存条**：底部固定显示「已保存 / 有未保存的修改」，并提供「预览 / 撤销修改 / 保存」。列表再长也不用滚回顶部；`⌘S`（macOS）或 `Ctrl+S` 也能保存。
+- 每段一张卡片：逐段启停、名称（≤80 字符）、位置（开头 / 中间 / 末尾）、上移 / 下移 / 删除。停用只加「已停用」标记，卡片仍可编辑；启用但正文为空会当场标黄（空段不会被注册）。
+- 每段显示字节数、落点提示和「解析 {{变量}}」开关。
+- **保存 / 撤销**：改动先暂存在页面里，保存才落盘，不会把半句话写进正在跑的会话。保存成功后，已有的预览会自动刷新。
+- **预览当前系统提示词**：调用宿主真实的 `assemble()` + `renderPrompt()`，用表格列出每段的顺序、order、字节数、哪些是本插件的，并给出最后拼出来的全文（可一键复制）。
 - **检查结果**：空段、与既有段落重复的行、开启插值后引用了未知变量、超过软上限的段，都会点名。
+- 样式只读 `--dsw-*` 主题 token：亮色、暗色和皮肤主题自动跟随，面板还会校验「不写死颜色」。
 
 预览的两条诚实边界（页面里也会写）：
 
@@ -128,9 +132,10 @@ dsh plugin --profile web add dsh-prompt-sections
 ## 兼容性与限制
 
 - 目标 `@deepseek-ai/*` **0.2.1-rc.2**（cordis 4.0.5 / schemastery 3.18.5 实测）。
-- 宿主没有 `webServer`（headless / acp / sdk）时，只有设置页消失，段落注册照常。
+- 宿主没有 `webServer`（headless / acp / sdk）时，只有侧栏面板消失，段落注册照常。
 - `{{...}}` 是严格插值：开启插值又写了未知变量，请求会在组装阶段失败——所以默认关闭。
 - 段落文字属于请求前缀，改动会让之后的缓存前缀失效；把稳定文本放「末尾」，比频繁改「开头」更省。
+- 面板占用中间列：切到别的侧栏面板（Plugins / 任务时间表…）就离开本面板，再点回来会重新拉一次状态；没保存的草稿不会跨面板保留。
 - 已知边界：预设 `complete: true` 时无法追加；预览看不到 scope 内的工具段。
 
 ## 开发
@@ -139,7 +144,7 @@ dsh plugin --profile web add dsh-prompt-sections
 npm install
 npm run typecheck   # tsc --noEmit（isolatedDeclarations）
 npm run build       # tsdown：lib/index.js（宿主）+ lib/client.js（浏览器）
-npm test            # node --test，32 项：真实 cordis + 真实 dsh-system-prompt + 路由 + 浏览器半区冒烟
+npm test            # node --test，40 项：真实 cordis + 真实 dsh-system-prompt + 路由 + 浏览器半区
 ```
 
 包结构：
@@ -152,15 +157,17 @@ src/register.ts   向 ctx.systemPrompt 注册段落
 src/preview.ts    真实组装 + 渲染 + 告警
 src/routes.ts     同源 JSON API
 src/index.ts      宿主入口（配置、监听器、路由装配）
-src/client.ts     设置页（仅 react，无宿主客户端包）
+src/client.ts     侧栏行 + 面板（仅 react，无宿主客户端包）
 ```
 
 ## English
 
-`dsh-prompt-sections` adds **user-owned system-prompt sections** to DeepSeek Harness. Write text in Settings, place it at the head, the middle, or the true tail of the assembled prompt, and it applies on the next model step — no restart.
+`dsh-prompt-sections` adds **user-owned system-prompt sections** to DeepSeek Harness. Write text in a left-column sidebar panel, place it at the head, the middle, or the true tail of the assembled prompt, and it applies on the next model step — no restart.
 
 - Host half registers one `ctx.systemPrompt.section()` per enabled entry at `user:prompt-sections:<id>`; global scope, so presets cannot shadow it (except a `complete: true` persona preset, which the preview reports).
-- Browser half is a Settings page built on plain `react` + `--dsw-alias-*` tokens: list editor, save/discard, and a preview produced by the host's real `assemble()` + `renderPrompt()`.
+- Browser half is a sidebar panel: a row in the shell's own panel list (`sidebar.panellist`) plus its page in the keyed `main` slot, so the shell keeps the button, label, active highlight and collapsed rail.
+- The panel is single-column — heading, section cards, preview — with a save bar pinned to the bottom (`⌘S` / `Ctrl+S` works too). Every colour comes from `--dsw-*` tokens, so light, dark and skin themes follow automatically.
+- The preview is produced by the host's real `assemble()` + `renderPrompt()`, refreshed after each save, and can be copied whole; checks name empty sections, repeated lines, unknown variables and oversize text.
 - One JSON document is the single source of truth; atomic writes, `0600`, change detection, and strict validation (unknown fields are rejected rather than dropped).
 
 MIT.

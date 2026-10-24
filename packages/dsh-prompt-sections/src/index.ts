@@ -19,8 +19,8 @@
  *
  * 1. the host half loads the state file, registers one prompt section per enabled
  *    entry, and (when `ctx.webServer` exists) serves the editor's JSON routes;
- * 2. the browser half registered by this package's `./client` export draws the
- *    settings page and talks to those routes.
+ * 2. the browser half registered by this package's `./client` export draws a
+ *    left-column sidebar panel and talks to those routes.
  *
  * Nothing here is coupled to a specific agent preset: registration happens on the
  * host context, so the global layer covers Web sessions, subagents and workflow

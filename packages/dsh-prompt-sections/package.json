@@ -1,7 +1,7 @@
 {
   "name": "dsh-prompt-sections",
   "version": "0.1.0",
-  "description": "User-owned system-prompt sections for DeepSeek Harness: write extra prompt text, place it anywhere in the assembled prompt, and edit it from the Web settings with a live preview.",
+  "description": "User-owned system-prompt sections for DeepSeek Harness: write extra prompt text, place it anywhere in the assembled prompt, and edit it from a left-column Web panel with a live preview.",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -30,7 +30,8 @@
     "system-prompt",
     "prompt",
     "instructions",
-    "settings"
+    "sidebar",
+    "panel"
   ],
   "engines": {
     "node": ">=20",
@@ -51,7 +52,7 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-ui-settings-general"
+        "@deepseek-ai/dsh-client-ui-layout"
       ]
     }
   },

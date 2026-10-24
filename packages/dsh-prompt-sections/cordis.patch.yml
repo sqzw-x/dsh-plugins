@@ -2,7 +2,7 @@
 #
 # One row. The row id (`prompt-sections`) is the profile entry id; the package
 # name (`dsh-prompt-sections`) is what resolves on disk. Both halves — the host
-# prompt registration and the Web settings section — ship from that one row.
+# prompt registration and the Web sidebar panel — ship from that one row.
 #
 # Optional configuration:
 #

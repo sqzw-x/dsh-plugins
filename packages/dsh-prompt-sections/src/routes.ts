@@ -1,5 +1,5 @@
 /**
- * The same-origin HTTP surface the settings page talks to.
+ * The same-origin HTTP surface the sidebar panel talks to.
  *
  * ## Why routes rather than a client-side settings namespace
  *
