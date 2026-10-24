@@ -38,6 +38,7 @@ pnpm build                               # 构建全部（TS 包）
 7. **客户端 bundle 的 id 必须等于包名。** 用 `pluginBuild({ id: '包名' })` 就不会写错；CI 会用 `assertClientBundle` 校验。
 8. **不新增第三个 workflow 文件。** CI 与发布各一个，按需改那一个。
 9. **发布相关（trusted publishing 绑定、远程仓库设置）属于手工步骤**，代码里不要试图自动化。
+10. **及时提交。** 开发时酌情及时提交，无需请示。
 
 ## 产物契约（CI 会验）
 
