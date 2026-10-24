@@ -21,6 +21,7 @@ function fakeReact() {
     useEffect: () => {},
     useCallback: (callback) => callback,
     useMemo: (factory) => factory(),
+    useRef: (current) => ({ current }),
   }
 }
 
@@ -311,12 +312,13 @@ test('the preview lists the assembly, marks our rows and localizes warnings', ()
   }
   const panel = module.PreviewPanel({
     preview,
+    previewing: false,
     previewError: undefined,
     dirty: true,
     copying: 'idle',
     t,
     onCopy: () => {},
-    onRetry: () => {},
+    onRefresh: () => {},
   })
   const table = findAll(panel, (node) => node.type === 'table')
   assert.equal(table.length, 1)
@@ -328,17 +330,42 @@ test('the preview lists the assembly, marks our rows and localizes warnings', ()
   assert.match(textOf(panel), /预览是已保存的版本/)
 })
 
+test('the preview header offers a refresh action and a loading state', () => {
+  const module = loadClient()
+  const t = zhOf(module)
+  let refreshes = 0
+  const panel = module.PreviewPanel({
+    preview: undefined,
+    previewing: true,
+    previewError: undefined,
+    dirty: false,
+    copying: 'idle',
+    t,
+    onCopy: () => {},
+    onRefresh: () => { refreshes++ },
+  })
+  const buttons = findAll(panel, (node) => node.type === 'button')
+  const refresh = buttons.find((node) => node.props.className === 'dspi-icon-btn dspi-preview-refresh')
+  assert.ok(refresh, 'the preview heading carries a refresh button')
+  assert.equal(refresh.props['aria-label'], '刷新预览')
+  assert.equal(refresh.props.disabled, true)
+  refresh.props.onClick()
+  assert.equal(refreshes, 1)
+  assert.match(textOf(panel), /组装中/)
+})
+
 test('a failed preview shows the error instead of an empty-preview note', () => {
   const module = loadClient()
   const t = zhOf(module)
   const panel = module.PreviewPanel({
     preview: undefined,
+    previewing: false,
     previewError: '预览失败: boom',
     dirty: false,
     copying: 'failed',
     t,
     onCopy: () => {},
-    onRetry: () => {},
+    onRefresh: () => {},
   })
   const text = textOf(panel)
   assert.match(text, /预览失败: boom/)

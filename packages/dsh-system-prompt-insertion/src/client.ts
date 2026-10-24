@@ -28,12 +28,14 @@
  *
  * ## Shape of the page
  *
- * One column, top to bottom: heading, section list, preview. Saving is a
- * persistent action bar pinned to the bottom of the panel, so a long list never
- * hides the primary action. The preview sits below the editor instead of beside
- * it: at a 960px content width two columns forced the prompt text into a third
- * of the window, and the list of assembled sections was clipped. A single
- * column keeps every control at the width the shell gives its own pages.
+ * One column, top to bottom: heading, preview, section editor. The preview
+ * comes first because it is the outcome the editor exists to shape. Save,
+ * discard and Add section live at the end of the editor rather than in a pinned
+ * footer, so the whole page scrolls as one document. The preview sits above
+ * instead of beside the editor: at a 960px content width two columns forced the
+ * prompt text into a third of the window, and the list of assembled sections
+ * was clipped. A single column keeps every control at the width the shell gives
+ * its own pages.
  *
  * The panel borrows the shell's visual grammar deliberately: a 960px content
  * column behind responsive gutters, 20px/500 page title, 0.5px hairline
@@ -47,10 +49,12 @@
  * The panel reads and writes the same JSON API the host half serves
  * (`/dsh-system-prompt-insertion/state`, `/preview`). Edits stage locally, so a
  * half-typed rule never reaches a running session; Save commits the whole
- * document at once. Preview calls the host's real `assemble()`+`renderPrompt()`,
- * which is why it can honestly list the host's own sections and flag our text as
- * hidden under a complete-prompt preset. Saving with a preview on screen
- * refreshes the preview, so the two never disagree.
+ * document at once. The master switch is the exception: it applies immediately,
+ * because the preview must agree with the control. Preview calls the host's
+ * real `assemble()`+`renderPrompt()`, which is why it can honestly list the
+ * host's own sections and flag our text as hidden under a complete-prompt
+ * preset. Entry, Save and switch changes refresh it automatically; the refresh
+ * control beside its heading covers prompt changes made by other plugins.
  *
  * @module dsh-system-prompt-insertion/client
  */
@@ -150,6 +154,7 @@ interface ReactLike {
   useEffect(effect: () => void | (() => void), deps?: readonly unknown[]): void
   useCallback<T>(callback: T, deps: readonly unknown[]): T
   useMemo<T>(factory: () => T, deps: readonly unknown[]): T
+  useRef<T>(initial: T): { current: T }
 }
 
 /** What a panel slot hands its occupant for the icon seat. */
@@ -179,15 +184,14 @@ const zh: Record<string, string> = {
   title: '提示词注入',
   description: '把你自己写的文字放到系统提示词的开头、中间或末尾。保存后下一个请求生效，不用重启。',
   enabled: '启用',
-  enabledHint: '关闭后所有段落都不再进入系统提示词，不必逐段停用。',
+  enabledHint: '关闭后所有段落都不再进入系统提示词，不必逐段停用；切换会立即保存。',
   add: '添加段落',
   addFirst: '添加第一个段落',
   save: '保存',
   saving: '保存中…',
   saveHint: '保存到状态文件；也可以按 {keys}',
   revert: '撤销修改',
-  preview: '预览',
-  previewLong: '预览当前系统提示词',
+  refreshPreview: '刷新预览',
   previewing: '组装中…',
   statusSaved: '已保存',
   statusDirty: '有未保存的修改',
@@ -228,7 +232,7 @@ const zh: Record<string, string> = {
   previewTitle: '当前系统提示词',
   previewSummary: '共 {count} 段，{bytes} 字节',
   previewStale: '预览是已保存的版本；保存后会自动刷新。',
-  previewNone: '还没有预览。点下面的「预览」，看看下一次请求真正发出去的完整提示词。',
+  previewNone: '还没有预览。点标题旁的刷新按钮，看看下一次请求真正发出去的完整提示词。',
   warnings: '检查结果',
   noWarnings: '没有发现问题。',
   ours: '本插件',
@@ -258,15 +262,14 @@ const en: Record<string, string> = {
   title: 'Prompt insertion',
   description: 'Place your own text at the head, middle, or tail of the system prompt. Saved text applies on the next request, with no restart.',
   enabled: 'Enabled',
-  enabledHint: 'Turning this off keeps every section out of the prompt without disabling them one by one.',
+  enabledHint: 'Turning this off keeps every section out of the prompt without disabling them one by one. The switch is saved immediately.',
   add: 'Add section',
   addFirst: 'Add the first section',
   save: 'Save',
   saving: 'Saving…',
   saveHint: 'Save to the state file; {keys} works too',
   revert: 'Discard changes',
-  preview: 'Preview',
-  previewLong: 'Preview the current prompt',
+  refreshPreview: 'Refresh preview',
   previewing: 'Assembling…',
   statusSaved: 'Saved',
   statusDirty: 'Unsaved changes',
@@ -307,7 +310,7 @@ const en: Record<string, string> = {
   previewTitle: 'The current system prompt',
   previewSummary: '{count} sections, {bytes} bytes',
   previewStale: 'The preview shows what is SAVED; it refreshes after you save.',
-  previewNone: 'Nothing previewed yet. Use "Preview" below to see the full prompt the next request sends.',
+  previewNone: 'Nothing previewed yet. Use the refresh button next to the title to see the full prompt the next request sends.',
   warnings: 'Checks',
   noWarnings: 'Nothing looks wrong.',
   ours: 'this plugin',
@@ -390,6 +393,18 @@ function errorText(body: Record<string, unknown>, fallback: string): string {
     if (text !== undefined) return `${fallback}: ${String(text)}`
   }
   return fallback
+}
+
+/** Build the panel payload from one `/state` response body. */
+function payloadFrom(body: Record<string, unknown>, fallbackOrigin: StatePayload['origin']): StatePayload {
+  return {
+    state: body.state as LayerState,
+    path: String(body.path ?? ''),
+    origin: (body.origin ?? fallbackOrigin) as StatePayload['origin'],
+    ...typeof body.error === 'string' ? { error: body.error } : {},
+    orderBases: (body.orderBases ?? { tailBase: 10200 }) as StatePayload['orderBases'],
+    registered: (body.registered ?? []) as string[],
+  }
 }
 
 /** Remove a leading localized prefix so a titled card does not repeat itself. */
@@ -564,12 +579,36 @@ export const PANEL_CSS = `
 .dspi-banner-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .dspi-banner .dspi-btn { flex: none; margin-left: auto; }
 .dspi-section { margin-top: 26px; }
+.dspi-section--preview { margin-top: 0; }
 .dspi-section-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .dspi-section-title { margin: 0; font-size: 13px; font-weight: 600; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .dspi-section-meta { font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-caption); }
 .dspi-section-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.dspi-icon-btn.dspi-preview-refresh[data-busy='true'] { opacity: .55; }
 .dspi-list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .dspi-list-item { display: block; min-width: 0; }
+.dspi-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 40px;
+  margin-top: 10px;
+  border: 1px dashed var(--dsw-alias-border-l3);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+  transition: background-color .15s, border-color .15s, color .15s;
+}
+.dspi-add:hover {
+  border-color: var(--dsw-alias-border-l4);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
 .dspi-card {
   padding: 12px 14px 10px;
   border: .5px solid var(--dsw-alias-border-l3);
@@ -771,25 +810,17 @@ export const PANEL_CSS = `
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.dspi-footer {
-  flex: none;
-  padding: 12px 0;
-  border-top: .5px solid var(--dsw-alias-border-l4);
-  background: var(--dsw-alias-bg-base);
-}
-.dspi-footer-inner {
+.dspi-settings-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
-  max-width: var(--dspi-content);
-  margin: 0 auto;
-  padding: 0 var(--dspi-gutter);
+  margin-top: 14px;
 }
+.dspi-settings-actions .dspi-status { margin-right: auto; }
 .dspi-status { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
 .dspi-status-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dsw-alias-state-success-primary); }
 .dspi-status-dot[data-dirty='true'] { background: var(--dsw-alias-state-warn-primary); }
-.dspi-footer-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .dspi-loading { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
 .dspi-spinner {
   width: 14px;
@@ -800,6 +831,7 @@ export const PANEL_CSS = `
   animation: dspi-spin .8s linear infinite;
 }
 @keyframes dspi-spin { to { transform: rotate(360deg); } }
+.dspi-spin { display: inline-flex; animation: dspi-spin 1s linear infinite; }
 .dspi-skeleton { height: 118px; margin-top: 12px; border-radius: 16px; background: var(--dsw-alias-bg-skeleton, var(--dsw-alias-bg-layer-2)); }
 .dspi-state { display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: .5px solid var(--dsw-alias-border-l3); border-radius: 16px; background: var(--dsw-alias-bg-layer-1); }
 .dspi-state-icon { flex: none; margin-top: 1px; color: var(--dsw-alias-state-error-primary); }
@@ -824,7 +856,7 @@ export const PANEL_CSS = `
 `
 
 /** Glyphs the panel draws itself; the shell only owns the sidebar row icon. */
-type GlyphName = 'up' | 'down' | 'trash' | 'warning' | 'check' | 'close' | 'copy' | 'sections'
+type GlyphName = 'up' | 'down' | 'trash' | 'warning' | 'check' | 'close' | 'copy' | 'sections' | 'refresh'
 
 /**
  * One 16×16 stroke glyph.
@@ -869,6 +901,11 @@ function glyph(h: ReactLike['createElement'], name: GlyphName, size = 14): unkno
       return svg([
         h('rect', { x: '5.5', y: '5.5', width: '7', height: '7', rx: '1.2' }),
         h('path', { d: 'M10.5 5.5V3.8a1 1 0 0 0-1-1H4.3a1.5 1.5 0 0 0-1.5 1.5v5.2a1 1 0 0 0 1 1h1.7' }),
+      ])
+    case 'refresh':
+      return svg([
+        h('path', { d: 'M13.5 8a5.5 5.5 0 1 1-1.6-3.9' }),
+        h('path', { d: 'M13.5 3v4h-4' }),
       ])
     default:
       return svg([
@@ -1081,15 +1118,16 @@ function SectionList(props: {
   }))))
 }
 
-/** The assembled-prompt preview, below the editor in the same column. */
+/** The assembled-prompt preview, shown above the editor. */
 export function PreviewPanel(props: {
   preview: PreviewResult | undefined
+  previewing: boolean
   previewError: string | undefined
   dirty: boolean
   copying: 'idle' | 'copied' | 'failed'
   t: (key: string) => string
   onCopy: () => void
-  onRetry: () => void
+  onRefresh: () => void
 }): unknown {
   const React = require('react') as ReactLike
   const h = React.createElement
@@ -1100,6 +1138,18 @@ export function PreviewPanel(props: {
   return h(React.Fragment, null,
     h('div', { className: 'dspi-section-head', id: 'dsh-system-prompt-insertion-preview' },
       h('h2', { className: 'dspi-section-title' }, t('previewTitle')),
+      h('button', {
+        type: 'button',
+        className: 'dspi-icon-btn dspi-preview-refresh',
+        onClick: props.onRefresh,
+        disabled: props.previewing,
+        'data-busy': props.previewing ? 'true' : 'false',
+        title: t('refreshPreview'),
+        'aria-label': t('refreshPreview'),
+      }, h('span', {
+        className: props.previewing ? 'dspi-spin' : undefined,
+        'aria-hidden': 'true',
+      }, glyph(h, 'refresh', 15))),
       preview === undefined
         ? null
         : h('span', { className: 'dspi-section-meta' }, format(t('previewSummary'), { count: preview.sections.length, bytes: preview.bytes })),
@@ -1120,11 +1170,18 @@ export function PreviewPanel(props: {
       : h('div', { className: 'dspi-banner dspi-banner--error', role: 'alert' },
         h('span', { className: 'dspi-banner-icon' }, glyph(h, 'warning')),
         h('div', { className: 'dspi-banner-text' }, props.previewError),
-        h('button', { type: 'button', className: 'dspi-btn dspi-btn--sm', onClick: props.onRetry }, t('retry')),
+        h('button', { type: 'button', className: 'dspi-btn dspi-btn--sm', onClick: props.onRefresh }, t('retry')),
       ),
     preview === undefined
       ? (props.previewError === undefined
-        ? h('div', { className: 'dspi-panel dspi-panel--idle' }, h('p', null, t('previewNone')))
+        ? h('div', { className: 'dspi-panel dspi-panel--idle' },
+          props.previewing
+            ? h('div', { className: 'dspi-loading' },
+              h('span', { className: 'dspi-spinner', 'aria-hidden': 'true' }),
+              h('span', null, t('previewing')),
+            )
+            : h('p', null, t('previewNone')),
+        )
         : null)
       : h('div', { className: 'dspi-panel' },
         props.dirty ? h('p', { className: 'dspi-note dspi-note--warn' }, t('previewStale')) : null,
@@ -1206,20 +1263,39 @@ function PromptInsertionPanel(props: { t?: (key: string) => string }): unknown {
     setError(undefined)
   }, [])
 
+  /** Bumped on every preview request; only the newest answer may land. */
+  const previewTicket = React.useRef(0)
+
+  const runPreview = React.useCallback(() => {
+    const ticket = ++previewTicket.current
+    setPreviewing(true)
+    setPreviewError(undefined)
+    fetch(`${API}/preview`, { headers: { accept: 'application/json' } })
+      .then((response) => readJson(response))
+      .then((body) => {
+        if (ticket !== previewTicket.current) return
+        setPreviewing(false)
+        if (body.ok === true) {
+          setPreview(body as unknown as PreviewResult)
+          return
+        }
+        setPreviewError(errorText(body, t('previewFailed')))
+      })
+      .catch((cause: unknown) => {
+        if (ticket !== previewTicket.current) return
+        setPreviewing(false)
+        setPreviewError(`${t('previewFailed')}: ${cause instanceof Error ? cause.message : String(cause)}`)
+      })
+  }, [t])
+
   const refresh = React.useCallback(() => {
     setPhase('loading')
     fetch(`${API}/state`, { headers: { accept: 'application/json' } })
       .then((response) => readJson(response))
       .then((body) => {
         if (body.ok === true) {
-          adopt({
-            state: body.state as LayerState,
-            path: String(body.path ?? ''),
-            origin: (body.origin ?? 'missing') as StatePayload['origin'],
-            ...typeof body.error === 'string' ? { error: body.error } : {},
-            orderBases: (body.orderBases ?? { tailBase: 10200 }) as StatePayload['orderBases'],
-            registered: (body.registered ?? []) as string[],
-          })
+          adopt(payloadFrom(body, 'missing'))
+          runPreview()
           return
         }
         setPhase('error')
@@ -1229,42 +1305,13 @@ function PromptInsertionPanel(props: { t?: (key: string) => string }): unknown {
         setPhase('error')
         setError(`${t('loadFailed')}: ${cause instanceof Error ? cause.message : String(cause)}`)
       })
-  }, [adopt, t])
+  }, [adopt, runPreview, t])
 
   React.useEffect(() => {
     refresh()
   }, [refresh])
 
   const dirty = draft !== undefined && payload !== undefined && JSON.stringify(draft) !== JSON.stringify(payload.state)
-
-  const revealPreview = React.useCallback(() => {
-    if (typeof document === 'undefined' || typeof window === 'undefined') return
-    const node = document.getElementById('dsh-system-prompt-insertion-preview')
-    if (node === null) return
-    const rect = node.getBoundingClientRect()
-    if (rect.top >= 0 && rect.bottom <= window.innerHeight) return
-    node.scrollIntoView({ block: 'start', behavior: 'smooth' })
-  }, [])
-
-  const runPreview = React.useCallback((options?: { reveal?: boolean }) => {
-    setPreviewing(true)
-    setPreviewError(undefined)
-    fetch(`${API}/preview`, { headers: { accept: 'application/json' } })
-      .then((response) => readJson(response))
-      .then((body) => {
-        setPreviewing(false)
-        if (body.ok === true) {
-          setPreview(body as unknown as PreviewResult)
-          if (options?.reveal !== false) window.setTimeout(revealPreview, 0)
-          return
-        }
-        setPreviewError(errorText(body, t('previewFailed')))
-      })
-      .catch((cause: unknown) => {
-        setPreviewing(false)
-        setPreviewError(`${t('previewFailed')}: ${cause instanceof Error ? cause.message : String(cause)}`)
-      })
-  }, [revealPreview, t])
 
   const save = React.useCallback(() => {
     if (draft === undefined || saving) return
@@ -1279,16 +1326,10 @@ function PromptInsertionPanel(props: { t?: (key: string) => string }): unknown {
       .then((body) => {
         setSaving(false)
         if (body.ok === true) {
-          adopt({
-            state: body.state as LayerState,
-            path: String(body.path ?? ''),
-            origin: (body.origin ?? 'memory') as StatePayload['origin'],
-            orderBases: (body.orderBases ?? { tailBase: 10200 }) as StatePayload['orderBases'],
-            registered: (body.registered ?? []) as string[],
-          })
+          adopt(payloadFrom(body, 'memory'))
           // The preview is the saved document by definition; refresh it rather
           // than leave stale text beside freshly saved sections.
-          if (preview !== undefined) runPreview({ reveal: false })
+          runPreview()
           return
         }
         setError(errorText(body, t('saveFailed')))
@@ -1297,7 +1338,45 @@ function PromptInsertionPanel(props: { t?: (key: string) => string }): unknown {
         setSaving(false)
         setError(`${t('saveFailed')}: ${cause instanceof Error ? cause.message : String(cause)}`)
       })
-  }, [adopt, draft, preview, runPreview, saving, t])
+  }, [adopt, draft, runPreview, saving, t])
+
+  /**
+   * Apply the master switch at once instead of staging it.
+   *
+   * The switch controls what the host registers, so a staged toggle would leave
+   * the preview disagreeing with the control until Save. Only the saved
+   * document's `enabled` field is sent; unsaved section edits stay staged.
+   */
+  const toggleEnabled = React.useCallback((next: boolean) => {
+    if (payload === undefined || draft === undefined || saving) return
+    const previous = payload.state.enabled
+    setSaving(true)
+    setError(undefined)
+    setDraft({ ...draft, enabled: next })
+    fetch(`${API}/state`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ ...payload.state, enabled: next }),
+    })
+      .then((response) => readJson(response))
+      .then((body) => {
+        setSaving(false)
+        if (body.ok === true) {
+          const applied = payloadFrom(body, 'memory')
+          setPayload(applied)
+          setDraft((current) => current === undefined ? applied.state : { ...current, enabled: next })
+          runPreview()
+          return
+        }
+        setDraft((current) => current === undefined ? current : { ...current, enabled: previous })
+        setError(errorText(body, t('saveFailed')))
+      })
+      .catch((cause: unknown) => {
+        setSaving(false)
+        setDraft((current) => current === undefined ? current : { ...current, enabled: previous })
+        setError(`${t('saveFailed')}: ${cause instanceof Error ? cause.message : String(cause)}`)
+      })
+  }, [draft, payload, runPreview, saving, t])
 
   // Cmd/Ctrl+S saves the staged document, like every other editor on the desktop.
   React.useEffect(() => {
@@ -1376,11 +1455,10 @@ function PromptInsertionPanel(props: { t?: (key: string) => string }): unknown {
     )
   }, [preview])
 
-  const shell = (content: unknown[], footer?: unknown): unknown => h('div', { className: 'dspi-root' },
+  const shell = (content: unknown[]): unknown => h('div', { className: 'dspi-root' },
     h('style', { 'data-dsh-system-prompt-insertion': 'styles' }, PANEL_CSS),
     h('div', { className: 'dspi-scroll' },
       h('div', { className: 'dspi-content' }, ...content)),
-    footer ?? null,
   )
 
   const heading = (extra?: unknown, actions?: unknown): unknown => h('header', { className: 'dspi-head' },
@@ -1437,10 +1515,10 @@ function PromptInsertionPanel(props: { t?: (key: string) => string }): unknown {
             checked: draft.enabled,
             label: t('enabled'),
             title: t('enabledHint'),
-            onChange: (next: boolean) => setDraft({ ...draft, enabled: next }),
+            disabled: saving,
+            onChange: toggleEnabled,
           }),
         ),
-        h('button', { type: 'button', className: 'dspi-btn dspi-btn--outline', onClick: addSection }, `＋ ${t('add')}`),
       ),
     ),
 
@@ -1463,6 +1541,20 @@ function PromptInsertionPanel(props: { t?: (key: string) => string }): unknown {
       )
       : null,
 
+    // The preview comes first: it is the outcome the editor exists to shape.
+    h('section', { className: 'dspi-section dspi-section--preview' },
+      h(PreviewPanel, {
+        preview,
+        previewing,
+        previewError,
+        dirty,
+        copying,
+        t,
+        onCopy: copyRendered,
+        onRefresh: runPreview,
+      }),
+    ),
+
     h('section', { className: 'dspi-section' },
       h('div', { className: 'dspi-section-head' },
         h('h2', { className: 'dspi-section-title' }, t('sectionsTitle')),
@@ -1477,36 +1569,20 @@ function PromptInsertionPanel(props: { t?: (key: string) => string }): unknown {
         onRemove: removeSection,
         onMove: moveSection,
       }),
-    ),
-
-    h('section', { className: 'dspi-section' },
-      h(PreviewPanel, {
-        preview,
-        previewError,
-        dirty,
-        copying,
-        t,
-        onCopy: copyRendered,
-        onRetry: () => runPreview({ reveal: true }),
-      }),
-    ),
-  ],
-  h('footer', { className: 'dspi-footer' },
-    h('div', { className: 'dspi-footer-inner' },
-      h('div', { className: 'dspi-status', role: 'status', 'aria-live': 'polite' },
-        h('span', { className: 'dspi-status-dot', 'data-dirty': dirty || saving ? 'true' : 'false', 'aria-hidden': 'true' }),
-        h('span', null, saving ? t('saving') : dirty ? t('statusDirty') : t('statusSaved')),
-      ),
-      h('div', { className: 'dspi-footer-actions' },
-        h('button', {
+      draft.sections.length === 0
+        ? null
+        : h('button', {
           type: 'button',
-          className: 'dspi-btn',
-          onClick: () => runPreview({ reveal: true }),
-          disabled: previewing,
-          title: t('previewLong'),
-        }, previewing ? t('previewing') : t('preview')),
+          className: 'dspi-add',
+          onClick: addSection,
+        }, `＋ ${t('add')}`),
+      h('div', { className: 'dspi-settings-actions' },
+        h('div', { className: 'dspi-status', role: 'status', 'aria-live': 'polite' },
+          h('span', { className: 'dspi-status-dot', 'data-dirty': dirty || saving ? 'true' : 'false', 'aria-hidden': 'true' }),
+          h('span', null, saving ? t('saving') : dirty ? t('statusDirty') : t('statusSaved')),
+        ),
         dirty
-          ? h('button', { type: 'button', className: 'dspi-btn', onClick: () => setDraft(payload.state) }, t('revert'))
+          ? h('button', { type: 'button', className: 'dspi-btn', disabled: saving, onClick: () => setDraft(payload.state) }, t('revert'))
           : null,
         h('button', {
           type: 'button',
@@ -1517,7 +1593,7 @@ function PromptInsertionPanel(props: { t?: (key: string) => string }): unknown {
         }, saving ? t('saving') : t('save')),
       ),
     ),
-  ))
+  ])
 }
 
 /** Locale + slot registration. */

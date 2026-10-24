@@ -16,7 +16,7 @@ DSH 每一步都会把 system prompt 按「段落 + order」重新组装。这�
 | 在人格之后、工具说明之前注入规则 | 位置选「开头」 |
 | 在工具说明之后注入工作约定 | 位置选「中间」 |
 | 临时关掉某一段 | 段落上的「启用」开关 |
-| 看清最终发给模型的是什么 | 「预览当前系统提示词」 |
+| 看清最终发给模型的是什么 | 页面顶部的预览区（标题旁可刷新） |
 | 手工/脚本维护 | 直接编辑 `~/.dsh/system-prompt-insertion.json` |
 
 和 `AGENTS.md` 的区别是**优先级来源**：`AGENTS.md` 以 **user 角色消息**注入，信封里明确写着它不覆盖 system 指令；本插件注册的是真正的 `system` 段落，与平台自己的指令同层。
@@ -54,11 +54,13 @@ dsh plugin --profile web add dsh-system-prompt-insertion
 ## 侧栏面板
 
 - 版式跟随宿主自己的全局页面（参考内置「任务时间表」页）：960px 内容列居中、两侧留白随窗口 `clamp(24px, 4vw, 48px)` 自适应、标题 20px/500，macOS 下会额外让开窗口顶部 48px。
-- **单栏**：标题 → 段落列表 → 预览自上而下排。编辑区和预览都占满内容列宽，长正文不再被挤在右半边；窄窗口不需要任何重排。
-- **常驻保存条**：底部固定显示「已保存 / 有未保存的修改」，并提供「预览 / 撤销修改 / 保存」。列表再长也不用滚回顶部；`⌘S`（macOS）或 `Ctrl+S` 也能保存。
+- **单栏，预览在上**：标题 → 当前系统提示词 → 段落编辑，自上而下排。编辑区和预览都占满内容列宽，长正文不再被挤在右半边；窄窗口不需要任何重排。
+- **预览常驻**：进入页面、保存、切换全局启用都会自动重新组装；没有单独的「预览」按钮。标题旁的刷新图标可以手动重拉，用于其他插件改了系统提示词之后。
+- **全局启用**：页头的开关切换即保存，并立即刷新预览；段落正文的改动仍然先暂存，需要点「保存」。
+- **保存 / 撤销**：位于段落编辑区右下角，旁边显示「已保存 / 有未保存的修改」；`⌘S`（macOS）或 `Ctrl+S` 也能保存。
+- **添加段落**：按钮在列表最后一张卡片下方；新卡片就地出现，并聚焦名称输入框。
 - 每段一张卡片：逐段启停、名称（≤80 字符）、位置（开头 / 中间 / 末尾）、上移 / 下移 / 删除。停用只加「已停用」标记，卡片仍可编辑；启用但正文为空会当场标黄（空段不会被注册）。
 - 每段显示字节数、落点提示和「解析 {{变量}}」开关。
-- **保存 / 撤销**：改动先暂存在页面里，保存才落盘，不会把半句话写进正在跑的会话。保存成功后，已有的预览会自动刷新。
 - **预览当前系统提示词**：调用宿主真实的 `assemble()` + `renderPrompt()`，用表格列出每段的顺序、order、字节数、哪些是本插件的，并给出最后拼出来的全文（可一键复制）。
 - **检查结果**：空段、与既有段落重复的行、开启插值后引用了未知变量、超过软上限的段，都会点名。
 - 样式只读 `--dsw-*` 主题 token：亮色、暗色和皮肤主题自动跟随，面板还会校验「不写死颜色」。
@@ -144,7 +146,7 @@ dsh plugin --profile web add dsh-system-prompt-insertion
 npm install
 npm run typecheck   # tsc --noEmit（isolatedDeclarations）
 npm run build       # tsdown：lib/index.js（宿主）+ lib/client.js（浏览器）
-npm test            # node --test，40 项：真实 cordis + 真实 dsh-system-prompt + 路由 + 浏览器半区
+npm test            # node --test，41 项：真实 cordis + 真实 dsh-system-prompt + 路由 + 浏览器半区
 ```
 
 包结构：
@@ -166,8 +168,9 @@ src/client.ts     侧栏行 + 面板（仅 react，无宿主客户端包）
 
 - Host half registers one `ctx.systemPrompt.section()` per enabled entry at `user:system-prompt-insertion:<id>`; global scope, so presets cannot shadow it (except a `complete: true` persona preset, which the preview reports).
 - Browser half is a sidebar panel: a row in the shell's own panel list (`sidebar.panellist`) plus its page in the keyed `main` slot, so the shell keeps the button, label, active highlight and collapsed rail.
-- The panel is single-column — heading, section cards, preview — with a save bar pinned to the bottom (`⌘S` / `Ctrl+S` works too). Every colour comes from `--dsw-*` tokens, so light, dark and skin themes follow automatically.
-- The preview is produced by the host's real `assemble()` + `renderPrompt()`, refreshed after each save, and can be copied whole; checks flag empty sections, repeated lines, unknown variables and oversize text.
+- The panel is single-column with the preview first: heading, the assembled prompt, then the section editor. Save and discard sit at the bottom-right of the editor; Add section sits under the last card. Every colour comes from `--dsw-*` tokens, so light, dark and skin themes follow automatically.
+- The preview is rendered on entry, after every save, and after the master switch changes. A refresh icon next to the title re-pulls it when another plugin changes the prompt; there is no separate Preview button. The master switch applies immediately, while section edits stay staged until Save (`⌘S` / `Ctrl+S` works too).
+- The preview is produced by the host's real `assemble()` + `renderPrompt()` and can be copied whole; checks flag empty sections, repeated lines, unknown variables and oversize text.
 - One JSON document is the single source of truth; atomic writes, `0600`, change detection, and strict validation (unknown fields are rejected rather than dropped).
 
 MIT.
