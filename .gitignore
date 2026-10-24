@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output — deliberately NOT ignored here: TypeScript packages ignore their
+# own `lib/` in a package-level .gitignore, while pure-JS packages (dsh-lan-link)
+# ship hand-written `lib/` and must keep it tracked.
+.types/
+dist/
+*.tsbuildinfo
+
+# Logs and local state
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Packed tarballs and local release scratch
+*.tgz
+.pnpm-store/
+
+# Editor state
+.idea/
+.vscode/

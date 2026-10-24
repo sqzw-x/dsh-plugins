@@ -1,0 +1,37 @@
+{
+  "name": "dsh-plugin-toolkit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared build and test plumbing for the plugins in this repository: one tsdown preset, one set of harness test doubles.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./tsdown": "./src/tsdown.mjs",
+    "./test": "./src/test.mjs"
+  },
+  "files": [
+    "src"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-system-prompt": "*",
+    "tsdown": ">=0.23.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-system-prompt": {
+      "optional": true
+    },
+    "tsdown": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "catalog:",
+    "@deepseek-ai/dsh-system-prompt": "catalog:",
+    "tsdown": "catalog:"
+  }
+}

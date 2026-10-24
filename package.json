@@ -1,0 +1,31 @@
+{
+  "name": "dsh-plugins",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "DeepSeek Harness plugins: one pnpm workspace, one release pipeline, independent npm packages.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sqzw-x/dsh-plugins.git"
+  },
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter \"./packages/*\" run build",
+    "typecheck": "pnpm -r --filter \"./packages/*\" run typecheck",
+    "test": "pnpm -r --filter \"./packages/*\" run test",
+    "check": "pnpm -r --filter \"./packages/*\" run check",
+    "verify": "pnpm typecheck && pnpm test",
+    "pack:dry": "pnpm -r --filter \"./packages/*\" exec npm pack --dry-run",
+    "changeset": "changeset",
+    "version-packages": "changeset version && pnpm install --lockfile-only",
+    "release": "pnpm build && changeset publish",
+    "sync-skill": "bash scripts/sync-skill.sh"
+  },
+  "devDependencies": {
+    "@changesets/cli": "catalog:"
+  }
+}
