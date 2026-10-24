@@ -98,13 +98,13 @@ test('planRegistrations skips disabled and empty sections and numbers per band',
     section({ id: 's-dddddd', position: 'tail' }),
     section({ id: 's-eeeeee', position: 'head' }),
   ])
-  const plan = planRegistrations(state, { tailBase: 10200 }, 'user:prompt-sections:')
+  const plan = planRegistrations(state, { tailBase: 10200 }, 'user:system-prompt-insertion:')
   assert.deepEqual(plan.map((entry) => [entry.name, entry.order]), [
-    ['user:prompt-sections:s-aaaaaa', 10500],
+    ['user:system-prompt-insertion:s-aaaaaa', 10500],
     // The empty one still consumed a band slot, so "s-dddddd" does not jump:
     // ordinals count the enabled entries the editor shows.
-    ['user:prompt-sections:s-dddddd', 10530],
-    ['user:prompt-sections:s-eeeeee', 10],
+    ['user:system-prompt-insertion:s-dddddd', 10530],
+    ['user:system-prompt-insertion:s-eeeeee', 10],
   ])
 })
 
@@ -115,7 +115,7 @@ test('planRegistrations contributes nothing while the plugin is switched off', (
 
 test('resolveOptions defaults to the harness home and expands an explicit path', () => {
   const fallback = resolveOptions({ enabled: true, storeFile: '', maxSectionBytes: 8192 })
-  assert.match(fallback.storeFile, /prompt-sections\.json$/)
+  assert.match(fallback.storeFile, /system-prompt-insertion\.json$/)
   assert.equal(fallback.maxSectionBytes, 8192)
 
   const explicit = resolveOptions({ enabled: true, storeFile: ' ~/somewhere/state.json ', maxSectionBytes: 0 })

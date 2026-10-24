@@ -1,11 +1,11 @@
 /**
- * `dsh-prompt-sections` — browser half.
+ * `dsh-system-prompt-insertion` — browser half.
  *
  * ## What this module is
  *
- * A sidebar panel for the sections the host half registers — not a settings
- * page. The shell's own panel family works through two seats that this module
- * fills together:
+ * A sidebar panel for the user-owned text the host half registers as sections —
+ * not a settings page. The shell's own panel family works through two seats that
+ * this module fills together:
  *
  * - `sidebar.panellist` gives us a row in the left column (the rail the Plugins,
  *   Schedules, Market and Context entries live in). The shell owns the button,
@@ -45,21 +45,21 @@
  * ## Data flow
  *
  * The panel reads and writes the same JSON API the host half serves
- * (`/dsh-prompt-sections/state`, `/preview`). Edits stage locally, so a
+ * (`/dsh-system-prompt-insertion/state`, `/preview`). Edits stage locally, so a
  * half-typed rule never reaches a running session; Save commits the whole
  * document at once. Preview calls the host's real `assemble()`+`renderPrompt()`,
  * which is why it can honestly list the host's own sections and flag our text as
  * hidden under a complete-prompt preset. Saving with a preview on screen
  * refreshes the preview, so the two never disagree.
  *
- * @module dsh-prompt-sections/client
+ * @module dsh-system-prompt-insertion/client
  */
 
 /** Locale namespace owned by this panel. */
-const NS = 'dsh-prompt-sections'
+const NS = 'dsh-system-prompt-insertion'
 
 /** URL prefix served by the host half (kept in sync with `routes.ts`). */
-const API = '/dsh-prompt-sections'
+const API = '/dsh-system-prompt-insertion'
 
 /**
  * The one panel id shared by the sidebar row and the `main` occupant.
@@ -67,7 +67,7 @@ const API = '/dsh-prompt-sections'
  * The shell projects the row's label and dispatches `main` by this exact key, so
  * both registrations read it instead of repeating a literal.
  */
-const PANEL_ID = 'prompt-sections'
+const PANEL_ID = 'system-prompt-insertion'
 
 /**
  * Position among the shell's global panel rows.
@@ -175,16 +175,16 @@ interface ClientContext {
 
 /** Copy, in the two languages the harness ships. */
 const zh: Record<string, string> = {
-  nav: '提示词段落',
-  title: '提示词段落',
-  description: '写自己的系统提示词文本，放到开头、中间或最末尾。保存后下一个请求生效，不用重启。',
+  nav: '提示词注入',
+  title: '提示词注入',
+  description: '把你自己写的文字放到系统提示词的开头、中间或末尾。保存后下一个请求生效，不用重启。',
   enabled: '启用',
   enabledHint: '关闭后所有段落都不再进入系统提示词，不必逐段停用。',
   add: '添加段落',
   addFirst: '添加第一个段落',
   save: '保存',
   saving: '保存中…',
-  saveHint: '保存到状态文件（{keys}）',
+  saveHint: '保存到状态文件；也可以按 {keys}',
   revert: '撤销修改',
   preview: '预览',
   previewLong: '预览当前系统提示词',
@@ -196,8 +196,8 @@ const zh: Record<string, string> = {
   originMissing: '文件尚未创建',
   originMemory: '刚保存',
   originUnreadable: '文件无法读取',
-  tailBase: '末尾档位 {order}',
-  tailBaseHint: '宿主最后一段的 order；本插件末尾段从它 +300 开始，预览里能看到每段的最终 order。',
+  tailBase: '宿主末段 {order}',
+  tailBaseHint: '宿主最后一个段落的 order；本插件末尾段从它 +300 开始，预览里能看到每段的最终 order。',
   section: '段落',
   sectionsTitle: '段落',
   sectionsSummary: '{count} 段 · 已注册 {registered}',
@@ -222,7 +222,7 @@ const zh: Record<string, string> = {
   bytesShort: '字节',
   orderShort: 'order',
   emptyListTitle: '还没有段落',
-  emptyListHint: '写第一段只影响你自己的系统提示词，保存后才进入下一个请求。',
+  emptyListHint: '写下的文字只进入你自己的系统提示词，保存后从下一个请求开始生效。',
   emptyChip: '正文为空',
   disabledChip: '已停用',
   previewTitle: '当前系统提示词',
@@ -245,25 +245,25 @@ const zh: Record<string, string> = {
   copyFailedHint: '浏览器拒绝了剪贴板访问，请手动选择全文。',
   warnEmpty: '「{title}」已启用但正文为空，不会被注册。',
   warnOversize: '「{title}」{bytes} 字节，超过软上限 {cap} 字节。',
-  warnDuplicate: '「{title}」里有句子与「{other}」重复。',
+  warnDuplicate: '「{title}」有一行与「{other}」重复。',
   warnUnknownVariable: '「{title}」引用了 {{name}}，当前组装没有可用值（已知：{known}）。',
-  warnHidden: '有段落已注册但不在当前组装里——可能当前预设用 complete 段落接管了整份提示词。',
+  warnHidden: '有段落已注册但不在当前组装里——当前预设可能用 complete: true 接管了整份提示词。',
   warnStoreError: '状态文件读取失败，仍在使用上一份内容：{message}',
   warnRenderError: '渲染失败：{message}',
-  warnPreviewPartial: '预览未带 agent scope，{names} 这类每-agent 变量按原样显示。',
+  warnPreviewPartial: '预览没有带上 agent scope，{names} 这类按 agent 取值的变量会按原样显示。',
 }
 
 const en: Record<string, string> = {
-  nav: 'Prompt sections',
-  title: 'Prompt sections',
-  description: 'Write your own system-prompt text and place it at the head, the middle, or the very end. Saved text applies on the next request, with no restart.',
+  nav: 'Prompt insertion',
+  title: 'Prompt insertion',
+  description: 'Place your own text at the head, middle, or tail of the system prompt. Saved text applies on the next request, with no restart.',
   enabled: 'Enabled',
   enabledHint: 'Turning this off keeps every section out of the prompt without disabling them one by one.',
   add: 'Add section',
   addFirst: 'Add the first section',
   save: 'Save',
   saving: 'Saving…',
-  saveHint: 'Save to the state file ({keys})',
+  saveHint: 'Save to the state file; {keys} works too',
   revert: 'Discard changes',
   preview: 'Preview',
   previewLong: 'Preview the current prompt',
@@ -275,7 +275,7 @@ const en: Record<string, string> = {
   originMissing: 'file not created yet',
   originMemory: 'just saved',
   originUnreadable: 'file unreadable',
-  tailBase: 'tail order {order}',
+  tailBase: 'Host tail {order}',
   tailBaseHint: 'The order of the host\'s last section; our tail sections start 300 after it. The preview shows each final order.',
   section: 'Section',
   sectionsTitle: 'Sections',
@@ -301,7 +301,7 @@ const en: Record<string, string> = {
   bytesShort: 'Bytes',
   orderShort: 'order',
   emptyListTitle: 'No sections yet',
-  emptyListHint: 'Write the first piece of system prompt that is yours alone; it applies after you save.',
+  emptyListHint: 'Text you write here enters your own system prompt only, starting with the first request after you save.',
   emptyChip: 'Empty body',
   disabledChip: 'Off',
   previewTitle: 'The current system prompt',
@@ -326,7 +326,7 @@ const en: Record<string, string> = {
   warnOversize: '"{title}" is {bytes} bytes, above the {cap}-byte soft cap.',
   warnDuplicate: '"{title}" repeats a line already present in "{other}".',
   warnUnknownVariable: '"{title}" references {{name}}, which has no value in this assembly (known: {known}).',
-  warnHidden: 'A section is registered but absent from the current assembly — the active preset may be taking over the whole prompt.',
+  warnHidden: 'A section is registered but absent from the current assembly — the active preset may be taking over the whole prompt with complete: true.',
   warnStoreError: 'The state file could not be read; the previous content is still live: {message}',
   warnRenderError: 'Rendering failed: {message}',
   warnPreviewPartial: 'Previewed without an agent scope, so per-agent variables such as {names} stayed literal.',
@@ -424,9 +424,9 @@ function newId(): string {
  * skin changes the panel without touching it.
  */
 export const PANEL_CSS = `
-.dps-root {
-  --dps-gutter: clamp(24px, 4vw, 48px);
-  --dps-content: 960px;
+.dspi-root {
+  --dspi-gutter: clamp(24px, 4vw, 48px);
+  --dspi-content: 960px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -440,12 +440,12 @@ export const PANEL_CSS = `
   font-size: 14px;
   line-height: 1.6;
 }
-.dps-root *, .dps-root *:before, .dps-root *:after { box-sizing: border-box; }
-.dps-root button, .dps-root input, .dps-root select, .dps-root textarea { font-family: inherit; }
-.dps-root button, .dps-root input, .dps-root select, .dps-root textarea, .dps-root pre { -webkit-app-region: no-drag; }
-.dps-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
-.dps-content { width: 100%; max-width: var(--dps-content); margin: 0 auto; padding: 0 var(--dps-gutter) 36px; }
-.dps-head {
+.dspi-root *, .dspi-root *:before, .dspi-root *:after { box-sizing: border-box; }
+.dspi-root button, .dspi-root input, .dspi-root select, .dspi-root textarea { font-family: inherit; }
+.dspi-root button, .dspi-root input, .dspi-root select, .dspi-root textarea, .dspi-root pre { -webkit-app-region: no-drag; }
+.dspi-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
+.dspi-content { width: 100%; max-width: var(--dspi-content); margin: 0 auto; padding: 0 var(--dspi-gutter) 36px; }
+.dspi-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -454,11 +454,11 @@ export const PANEL_CSS = `
   padding-top: 28px;
   margin-bottom: 22px;
 }
-[data-platform='darwin'] .dps-head { padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px)); }
-.dps-head-main { flex: 1 1 360px; min-width: 0; }
-.dps-title { margin: 0; font-size: 20px; font-weight: 500; line-height: 28px; color: var(--dsw-alias-label-primary); }
-.dps-subtitle { max-width: 640px; margin: 4px 0 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
-.dps-meta {
+[data-platform='darwin'] .dspi-head { padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px)); }
+.dspi-head-main { flex: 1 1 360px; min-width: 0; }
+.dspi-title { margin: 0; font-size: 20px; font-weight: 500; line-height: 28px; color: var(--dsw-alias-label-primary); }
+.dspi-subtitle { max-width: 640px; margin: 4px 0 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
+.dspi-meta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -468,7 +468,7 @@ export const PANEL_CSS = `
   line-height: 18px;
   color: var(--dsw-alias-label-caption);
 }
-.dps-meta code {
+.dspi-meta code {
   max-width: min(100%, 420px);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -476,10 +476,10 @@ export const PANEL_CSS = `
   font-family: ${MONO};
   font-size: 12px;
 }
-.dps-origin[data-origin='missing'] { color: var(--dsw-alias-state-warn-label); }
-.dps-origin[data-origin='unreadable'] { color: var(--dsw-alias-state-error-primary); }
-.dps-head-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.dps-master {
+.dspi-origin[data-origin='missing'] { color: var(--dsw-alias-state-warn-label); }
+.dspi-origin[data-origin='unreadable'] { color: var(--dsw-alias-state-error-primary); }
+.dspi-head-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.dspi-master {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -488,7 +488,7 @@ export const PANEL_CSS = `
   color: var(--dsw-alias-label-secondary);
   user-select: none;
 }
-.dps-btn {
+.dspi-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -505,13 +505,13 @@ export const PANEL_CSS = `
   cursor: pointer;
   transition: background-color .15s, border-color .15s, opacity .15s;
 }
-.dps-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
-.dps-btn:disabled { opacity: .4; cursor: not-allowed; }
-.dps-btn--primary { background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-foreground); }
-.dps-btn--primary:hover:not(:disabled) { background: var(--dsw-alias-button-primary-hover); }
-.dps-btn--outline { box-shadow: inset 0 0 0 .5px var(--dsw-alias-border-l3); }
-.dps-btn--sm { height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; line-height: 18px; }
-.dps-switch {
+.dspi-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.dspi-btn:disabled { opacity: .4; cursor: not-allowed; }
+.dspi-btn--primary { background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-foreground); }
+.dspi-btn--primary:hover:not(:disabled) { background: var(--dsw-alias-button-primary-hover); }
+.dspi-btn--outline { box-shadow: inset 0 0 0 .5px var(--dsw-alias-border-l3); }
+.dspi-btn--sm { height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; line-height: 18px; }
+.dspi-switch {
   position: relative;
   flex: none;
   width: 36px;
@@ -523,9 +523,9 @@ export const PANEL_CSS = `
   cursor: pointer;
   transition: background-color .15s;
 }
-.dps-switch[aria-checked='true'] { background: var(--dsw-alias-brand-primary); }
-.dps-switch:disabled { opacity: .5; cursor: default; }
-.dps-switch-thumb {
+.dspi-switch[aria-checked='true'] { background: var(--dsw-alias-brand-primary); }
+.dspi-switch:disabled { opacity: .5; cursor: default; }
+.dspi-switch-thumb {
   display: block;
   width: 16px;
   height: 16px;
@@ -533,20 +533,20 @@ export const PANEL_CSS = `
   background: var(--dsw-alias-label-primary-foreground);
   transition: transform .12s ease;
 }
-.dps-switch[aria-checked='false'] .dps-switch-thumb { background: var(--dsw-alias-switch-thumb); }
-.dps-switch[aria-checked='true'] .dps-switch-thumb { transform: translateX(16px); }
-.dps-root button:focus-visible,
-.dps-root select:focus-visible,
-.dps-root input[type='checkbox']:focus-visible,
-.dps-root pre:focus-visible {
+.dspi-switch[aria-checked='false'] .dspi-switch-thumb { background: var(--dsw-alias-switch-thumb); }
+.dspi-switch[aria-checked='true'] .dspi-switch-thumb { transform: translateX(16px); }
+.dspi-root button:focus-visible,
+.dspi-root select:focus-visible,
+.dspi-root input[type='checkbox']:focus-visible,
+.dspi-root pre:focus-visible {
   outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
-.dps-switch:focus-visible {
+.dspi-switch:focus-visible {
   outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
-.dps-banner {
+.dspi-banner {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -558,30 +558,30 @@ export const PANEL_CSS = `
   font-size: 13px;
   line-height: 20px;
 }
-.dps-banner--error { background: var(--dsw-alias-interactive-bg-hover-danger); color: var(--dsw-alias-state-error-primary); }
-.dps-banner--warn { background: var(--dsw-alias-state-warn-tertiary); color: var(--dsw-alias-state-warn-label); }
-.dps-banner-icon { flex: none; margin-top: 3px; }
-.dps-banner-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.dps-banner .dps-btn { flex: none; margin-left: auto; }
-.dps-section { margin-top: 26px; }
-.dps-section-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.dps-section-title { margin: 0; font-size: 13px; font-weight: 600; line-height: 20px; color: var(--dsw-alias-label-secondary); }
-.dps-section-meta { font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-caption); }
-.dps-section-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.dps-list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.dps-list-item { display: block; min-width: 0; }
-.dps-card {
+.dspi-banner--error { background: var(--dsw-alias-interactive-bg-hover-danger); color: var(--dsw-alias-state-error-primary); }
+.dspi-banner--warn { background: var(--dsw-alias-state-warn-tertiary); color: var(--dsw-alias-state-warn-label); }
+.dspi-banner-icon { flex: none; margin-top: 3px; }
+.dspi-banner-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.dspi-banner .dspi-btn { flex: none; margin-left: auto; }
+.dspi-section { margin-top: 26px; }
+.dspi-section-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.dspi-section-title { margin: 0; font-size: 13px; font-weight: 600; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+.dspi-section-meta { font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-caption); }
+.dspi-section-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.dspi-list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.dspi-list-item { display: block; min-width: 0; }
+.dspi-card {
   padding: 12px 14px 10px;
   border: .5px solid var(--dsw-alias-border-l3);
   border-radius: 16px;
   background: var(--dsw-alias-bg-layer-1);
   transition: border-color .15s;
 }
-.dps-card:hover, .dps-card:focus-within { border-color: var(--dsw-alias-border-l4); }
-.dps-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 32px; }
-.dps-card-head-main { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; }
-.dps-card-head-side { display: flex; align-items: center; gap: 4px; flex: none; margin-left: auto; }
-.dps-title-input {
+.dspi-card:hover, .dspi-card:focus-within { border-color: var(--dsw-alias-border-l4); }
+.dspi-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 32px; }
+.dspi-card-head-main { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; }
+.dspi-card-head-side { display: flex; align-items: center; gap: 4px; flex: none; margin-left: auto; }
+.dspi-title-input {
   flex: 1 1 auto;
   min-width: 0;
   height: 28px;
@@ -595,12 +595,12 @@ export const PANEL_CSS = `
   font-weight: 500;
   line-height: 22px;
 }
-.dps-title-input:hover { border-bottom-color: var(--dsw-alias-border-l3); }
-.dps-title-input:focus { outline: none; border-bottom-color: var(--dsw-alias-state-business-primary); }
-.dps-title-input::placeholder { color: var(--dsw-alias-label-caption); font-weight: 400; }
-.dps-card[data-enabled='false'] .dps-title-input { color: var(--dsw-alias-label-secondary); }
-.dps-select-wrap { position: relative; display: inline-flex; align-items: center; flex: none; }
-.dps-select {
+.dspi-title-input:hover { border-bottom-color: var(--dsw-alias-border-l3); }
+.dspi-title-input:focus { outline: none; border-bottom-color: var(--dsw-alias-state-business-primary); }
+.dspi-title-input::placeholder { color: var(--dsw-alias-label-caption); font-weight: 400; }
+.dspi-card[data-enabled='false'] .dspi-title-input { color: var(--dsw-alias-label-secondary); }
+.dspi-select-wrap { position: relative; display: inline-flex; align-items: center; flex: none; }
+.dspi-select {
   height: 28px;
   padding: 0 24px 0 10px;
   border: .5px solid var(--dsw-alias-border-l3);
@@ -612,9 +612,9 @@ export const PANEL_CSS = `
   cursor: pointer;
   appearance: none;
 }
-.dps-select:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.dps-caret { position: absolute; right: 8px; top: 50%; width: 12px; height: 12px; transform: translateY(-50%); color: var(--dsw-alias-label-tertiary); pointer-events: none; }
-.dps-icon-btn {
+.dspi-select:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dspi-caret { position: absolute; right: 8px; top: 50%; width: 12px; height: 12px; transform: translateY(-50%); color: var(--dsw-alias-label-tertiary); pointer-events: none; }
+.dspi-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -628,10 +628,10 @@ export const PANEL_CSS = `
   cursor: pointer;
   transition: background-color .15s, color .15s;
 }
-.dps-icon-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.dps-icon-btn:disabled { opacity: .3; cursor: default; }
-.dps-icon-btn--danger:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover-danger); color: var(--dsw-alias-state-error-primary); }
-.dps-textarea {
+.dspi-icon-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.dspi-icon-btn:disabled { opacity: .3; cursor: default; }
+.dspi-icon-btn--danger:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover-danger); color: var(--dsw-alias-state-error-primary); }
+.dspi-textarea {
   display: block;
   width: 100%;
   min-height: 96px;
@@ -649,14 +649,14 @@ export const PANEL_CSS = `
   field-sizing: content;
   transition: border-color .15s;
 }
-.dps-textarea:hover { border-color: var(--dsw-alias-border-l2); }
-.dps-textarea:focus { outline: none; border-color: var(--dsw-alias-state-business-primary); }
-.dps-textarea::placeholder { color: var(--dsw-alias-label-caption); }
-.dps-card-meta { display: flex; align-items: center; gap: 4px 12px; flex-wrap: wrap; margin-top: 6px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-caption); }
-.dps-card-hint { flex: 1 1 220px; min-width: 0; color: var(--dsw-alias-label-tertiary); }
-.dps-check { display: inline-flex; align-items: center; gap: 6px; flex: none; margin-left: auto; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 20px; cursor: pointer; white-space: nowrap; }
-.dps-check input { width: 14px; height: 14px; margin: 0; accent-color: var(--dsw-alias-brand-primary); cursor: inherit; }
-.dps-chip {
+.dspi-textarea:hover { border-color: var(--dsw-alias-border-l2); }
+.dspi-textarea:focus { outline: none; border-color: var(--dsw-alias-state-business-primary); }
+.dspi-textarea::placeholder { color: var(--dsw-alias-label-caption); }
+.dspi-card-meta { display: flex; align-items: center; gap: 4px 12px; flex-wrap: wrap; margin-top: 6px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-caption); }
+.dspi-card-hint { flex: 1 1 220px; min-width: 0; color: var(--dsw-alias-label-tertiary); }
+.dspi-check { display: inline-flex; align-items: center; gap: 6px; flex: none; margin-left: auto; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 20px; cursor: pointer; white-space: nowrap; }
+.dspi-check input { width: 14px; height: 14px; margin: 0; accent-color: var(--dsw-alias-brand-primary); cursor: inherit; }
+.dspi-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -669,8 +669,8 @@ export const PANEL_CSS = `
   line-height: 20px;
   white-space: nowrap;
 }
-.dps-chip--warn { background: var(--dsw-alias-state-warn-tertiary); color: var(--dsw-alias-state-warn-label); }
-.dps-empty {
+.dspi-chip--warn { background: var(--dsw-alias-state-warn-tertiary); color: var(--dsw-alias-state-warn-label); }
+.dspi-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -680,11 +680,11 @@ export const PANEL_CSS = `
   border-radius: 16px;
   text-align: center;
 }
-.dps-empty-glyph { margin-bottom: 6px; color: var(--dsw-alias-label-caption); }
-.dps-empty-title { margin: 0; font-size: 14px; font-weight: 500; line-height: 22px; color: var(--dsw-alias-label-secondary); }
-.dps-empty-hint { margin: 0; max-width: 440px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
-.dps-empty-action { margin-top: 14px; }
-.dps-panel {
+.dspi-empty-glyph { margin-bottom: 6px; color: var(--dsw-alias-label-caption); }
+.dspi-empty-title { margin: 0; font-size: 14px; font-weight: 500; line-height: 22px; color: var(--dsw-alias-label-secondary); }
+.dspi-empty-hint { margin: 0; max-width: 440px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
+.dspi-empty-action { margin-top: 14px; }
+.dspi-panel {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -693,13 +693,13 @@ export const PANEL_CSS = `
   border-radius: 16px;
   background: var(--dsw-alias-bg-layer-1);
 }
-.dps-panel--idle { padding: 20px; color: var(--dsw-alias-label-tertiary); font-size: 13px; line-height: 20px; }
-.dps-panel--idle p { margin: 0; }
-.dps-note { margin: 0; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
-.dps-note--warn { color: var(--dsw-alias-state-warn-label); }
-.dps-subhead { margin: 0; font-size: 12px; font-weight: 600; line-height: 20px; color: var(--dsw-alias-label-secondary); }
-.dps-inline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
-.dps-var {
+.dspi-panel--idle { padding: 20px; color: var(--dsw-alias-label-tertiary); font-size: 13px; line-height: 20px; }
+.dspi-panel--idle p { margin: 0; }
+.dspi-note { margin: 0; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
+.dspi-note--warn { color: var(--dsw-alias-state-warn-label); }
+.dspi-subhead { margin: 0; font-size: 12px; font-weight: 600; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+.dspi-inline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
+.dspi-var {
   padding: 1px 6px;
   border-radius: 6px;
   background: var(--dsw-alias-bg-module-platform);
@@ -707,19 +707,19 @@ export const PANEL_CSS = `
   font-family: ${MONO};
   font-size: 11.5px;
 }
-.dps-checks { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.dps-check-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-state-warn-label); }
-.dps-check-dot { flex: none; width: 5px; height: 5px; margin-top: 7px; border-radius: 50%; background: currentColor; }
-.dps-check-row--ok { color: var(--dsw-alias-state-success-primary); }
-.dps-check-row .dps-check-icon { flex: none; margin-top: 4px; }
-.dps-table-scroll {
+.dspi-checks { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.dspi-check-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-state-warn-label); }
+.dspi-check-dot { flex: none; width: 5px; height: 5px; margin-top: 7px; border-radius: 50%; background: currentColor; }
+.dspi-check-row--ok { color: var(--dsw-alias-state-success-primary); }
+.dspi-check-row .dspi-check-icon { flex: none; margin-top: 4px; }
+.dspi-table-scroll {
   overflow: hidden;
   border: .5px solid var(--dsw-alias-border-l3);
   border-radius: 12px;
   background: var(--dsw-alias-bg-base);
 }
-.dps-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-family: ${MONO}; font-size: 11.5px; }
-.dps-table th {
+.dspi-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-family: ${MONO}; font-size: 11.5px; }
+.dspi-table th {
   position: sticky;
   top: 0;
   z-index: 1;
@@ -730,7 +730,7 @@ export const PANEL_CSS = `
   font-weight: 500;
   text-align: left;
 }
-.dps-table td {
+.dspi-table td {
   padding: 5px 8px;
   border-bottom: .5px solid var(--dsw-alias-border-l1);
   color: var(--dsw-alias-label-tertiary);
@@ -738,14 +738,14 @@ export const PANEL_CSS = `
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.dps-table tr:last-child td { border-bottom: 0; }
-.dps-table tr[data-ours='true'] td { color: var(--dsw-alias-label-primary); }
-.dps-table .dps-col-index { width: 38px; }
-.dps-table .dps-col-order { width: 64px; }
-.dps-table .dps-col-bytes { width: 64px; text-align: right; }
-.dps-name-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.dps-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dps-tag {
+.dspi-table tr:last-child td { border-bottom: 0; }
+.dspi-table tr[data-ours='true'] td { color: var(--dsw-alias-label-primary); }
+.dspi-table .dspi-col-index { width: 38px; }
+.dspi-table .dspi-col-order { width: 64px; }
+.dspi-table .dspi-col-bytes { width: 64px; text-align: right; }
+.dspi-name-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.dspi-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dspi-tag {
   flex: none;
   height: 18px;
   padding: 0 6px;
@@ -756,7 +756,7 @@ export const PANEL_CSS = `
   font-size: 10.5px;
   line-height: 18px;
 }
-.dps-pre {
+.dspi-pre {
   margin: 0;
   max-height: 340px;
   overflow: auto;
@@ -771,55 +771,55 @@ export const PANEL_CSS = `
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.dps-footer {
+.dspi-footer {
   flex: none;
   padding: 12px 0;
   border-top: .5px solid var(--dsw-alias-border-l4);
   background: var(--dsw-alias-bg-base);
 }
-.dps-footer-inner {
+.dspi-footer-inner {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  max-width: var(--dps-content);
+  max-width: var(--dspi-content);
   margin: 0 auto;
-  padding: 0 var(--dps-gutter);
+  padding: 0 var(--dspi-gutter);
 }
-.dps-status { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
-.dps-status-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dsw-alias-state-success-primary); }
-.dps-status-dot[data-dirty='true'] { background: var(--dsw-alias-state-warn-primary); }
-.dps-footer-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.dps-loading { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
-.dps-spinner {
+.dspi-status { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
+.dspi-status-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dsw-alias-state-success-primary); }
+.dspi-status-dot[data-dirty='true'] { background: var(--dsw-alias-state-warn-primary); }
+.dspi-footer-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.dspi-loading { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
+.dspi-spinner {
   width: 14px;
   height: 14px;
   border: 2px solid var(--dsw-alias-border-l3);
   border-top-color: var(--dsw-alias-state-business-primary);
   border-radius: 50%;
-  animation: dps-spin .8s linear infinite;
+  animation: dspi-spin .8s linear infinite;
 }
-@keyframes dps-spin { to { transform: rotate(360deg); } }
-.dps-skeleton { height: 118px; margin-top: 12px; border-radius: 16px; background: var(--dsw-alias-bg-skeleton, var(--dsw-alias-bg-layer-2)); }
-.dps-state { display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: .5px solid var(--dsw-alias-border-l3); border-radius: 16px; background: var(--dsw-alias-bg-layer-1); }
-.dps-state-icon { flex: none; margin-top: 1px; color: var(--dsw-alias-state-error-primary); }
-.dps-state-body { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
-.dps-state-title { margin: 0; font-size: 14px; font-weight: 500; line-height: 22px; color: var(--dsw-alias-label-primary); }
-.dps-state-hint { margin: 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); overflow-wrap: anywhere; }
+@keyframes dspi-spin { to { transform: rotate(360deg); } }
+.dspi-skeleton { height: 118px; margin-top: 12px; border-radius: 16px; background: var(--dsw-alias-bg-skeleton, var(--dsw-alias-bg-layer-2)); }
+.dspi-state { display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: .5px solid var(--dsw-alias-border-l3); border-radius: 16px; background: var(--dsw-alias-bg-layer-1); }
+.dspi-state-icon { flex: none; margin-top: 1px; color: var(--dsw-alias-state-error-primary); }
+.dspi-state-body { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
+.dspi-state-title { margin: 0; font-size: 14px; font-weight: 500; line-height: 22px; color: var(--dsw-alias-label-primary); }
+.dspi-state-hint { margin: 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); overflow-wrap: anywhere; }
 @media (max-width: 720px) {
-  .dps-head { gap: 12px; }
-  .dps-head-actions { width: 100%; }
+  .dspi-head { gap: 12px; }
+  .dspi-head-actions { width: 100%; }
 }
 @media (max-width: 560px) {
-  .dps-card { padding: 10px 12px 8px; }
-  .dps-card-head-main { flex-basis: 100%; }
-  .dps-card-head-side { margin-left: 0; }
-  .dps-check { margin-left: 0; }
-  .dps-meta code { max-width: 100%; }
+  .dspi-card { padding: 10px 12px 8px; }
+  .dspi-card-head-main { flex-basis: 100%; }
+  .dspi-card-head-side { margin-left: 0; }
+  .dspi-check { margin-left: 0; }
+  .dspi-meta code { max-width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .dps-spinner { animation: none; }
-  .dps-card, .dps-btn, .dps-switch, .dps-switch-thumb, .dps-icon-btn { transition: none; }
+  .dspi-spinner { animation: none; }
+  .dspi-card, .dspi-btn, .dspi-switch, .dspi-switch-thumb, .dspi-icon-btn { transition: none; }
 }
 `
 
@@ -923,13 +923,13 @@ function Switch(props: {
   return h('button', {
     type: 'button',
     role: 'switch',
-    className: 'dps-switch',
+    className: 'dspi-switch',
     'aria-checked': props.checked,
     'aria-label': props.label,
     ...props.title === undefined ? {} : { title: props.title },
     ...props.disabled === true ? { disabled: true } : {},
     onClick: () => props.onChange(!props.checked),
-  }, h('span', { className: 'dps-switch-thumb', 'aria-hidden': 'true' }))
+  }, h('span', { className: 'dspi-switch-thumb', 'aria-hidden': 'true' }))
 }
 
 /** One section editor card. */
@@ -951,12 +951,12 @@ function SectionCard(props: {
   const empty = section.text.trim() === ''
 
   return h('div', {
-    className: 'dps-card',
+    className: 'dspi-card',
     'data-enabled': section.enabled ? 'true' : 'false',
     'data-section-id': section.id,
   },
-  h('div', { className: 'dps-card-head' },
-    h('div', { className: 'dps-card-head-main' },
+  h('div', { className: 'dspi-card-head' },
+    h('div', { className: 'dspi-card-head-main' },
       h(Switch, {
         checked: section.enabled,
         label: format(t('toggleNamed'), { title: section.title || t('section') }),
@@ -964,7 +964,7 @@ function SectionCard(props: {
         onChange: (next: boolean) => props.onChange({ ...section, enabled: next }),
       }),
       h('input', {
-        className: 'dps-title-input',
+        className: 'dspi-title-input',
         value: section.title,
         maxLength: 80,
         autoFocus: props.autoFocus,
@@ -973,10 +973,10 @@ function SectionCard(props: {
         onChange: (event: { target: { value: string } }) => props.onChange({ ...section, title: event.target.value }),
       }),
     ),
-    h('div', { className: 'dps-card-head-side' },
-      h('span', { className: 'dps-select-wrap' },
+    h('div', { className: 'dspi-card-head-side' },
+      h('span', { className: 'dspi-select-wrap' },
         h('select', {
-          className: 'dps-select',
+          className: 'dspi-select',
           value: section.position,
           title: hint,
           'aria-label': format(t('positionOf'), { index: props.index + 1 }),
@@ -986,12 +986,12 @@ function SectionCard(props: {
         h('option', { value: 'body' }, t('positionBody')),
         h('option', { value: 'tail' }, t('positionTail')),
         ),
-        h('svg', { className: 'dps-caret', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: '1.2', strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' },
+        h('svg', { className: 'dspi-caret', viewBox: '0 0 12 12', fill: 'none', stroke: 'currentColor', strokeWidth: '1.2', strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' },
           h('path', { d: 'M3 4.6 6 7.6 9 4.6' })),
       ),
       h('button', {
         type: 'button',
-        className: 'dps-icon-btn',
+        className: 'dspi-icon-btn',
         title: format(t('moveUpNamed'), { title: section.title || t('section') }),
         'aria-label': format(t('moveUpNamed'), { title: section.title || t('section') }),
         disabled: props.index === 0,
@@ -999,7 +999,7 @@ function SectionCard(props: {
       }, glyph(h, 'up', 15)),
       h('button', {
         type: 'button',
-        className: 'dps-icon-btn',
+        className: 'dspi-icon-btn',
         title: format(t('moveDownNamed'), { title: section.title || t('section') }),
         'aria-label': format(t('moveDownNamed'), { title: section.title || t('section') }),
         disabled: props.index === props.total - 1,
@@ -1007,7 +1007,7 @@ function SectionCard(props: {
       }, glyph(h, 'down', 15)),
       h('button', {
         type: 'button',
-        className: 'dps-icon-btn dps-icon-btn--danger',
+        className: 'dspi-icon-btn dspi-icon-btn--danger',
         title: format(t('removeNamed'), { title: section.title || t('section') }),
         'aria-label': format(t('removeNamed'), { title: section.title || t('section') }),
         onClick: props.onRemove,
@@ -1015,7 +1015,7 @@ function SectionCard(props: {
     ),
   ),
   h('textarea', {
-    className: 'dps-textarea',
+    className: 'dspi-textarea',
     value: section.text,
     rows: Math.min(18, Math.max(5, section.text.split('\n').length + 2)),
     placeholder: t('textPlaceholder'),
@@ -1023,13 +1023,13 @@ function SectionCard(props: {
     spellCheck: false,
     onChange: (event: { target: { value: string } }) => props.onChange({ ...section, text: event.target.value }),
   }),
-  h('div', { className: 'dps-card-meta' },
+  h('div', { className: 'dspi-card-meta' },
     h('span', null, format(t('bytes'), { bytes })),
-    h('span', { className: 'dps-card-hint' }, hint),
+    h('span', { className: 'dspi-card-hint' }, hint),
     section.enabled
-      ? (empty ? h('span', { className: 'dps-chip dps-chip--warn' }, t('emptyChip')) : null)
-      : h('span', { className: 'dps-chip' }, t('disabledChip')),
-    h('label', { className: 'dps-check', title: t('interpolateHint') },
+      ? (empty ? h('span', { className: 'dspi-chip dspi-chip--warn' }, t('emptyChip')) : null)
+      : h('span', { className: 'dspi-chip' }, t('disabledChip')),
+    h('label', { className: 'dspi-check', title: t('interpolateHint') },
       h('input', {
         type: 'checkbox',
         checked: section.interpolate,
@@ -1056,19 +1056,19 @@ function SectionList(props: {
   const { sections, t } = props
 
   if (sections.length === 0) {
-    return h('div', { className: 'dps-empty' },
-      h('span', { className: 'dps-empty-glyph' }, glyph(h, 'sections', 28)),
-      h('p', { className: 'dps-empty-title' }, t('emptyListTitle')),
-      h('p', { className: 'dps-empty-hint' }, t('emptyListHint')),
-      h('div', { className: 'dps-empty-action' },
-        h('button', { type: 'button', className: 'dps-btn dps-btn--primary', onClick: props.onAdd }, `＋ ${t('addFirst')}`),
+    return h('div', { className: 'dspi-empty' },
+      h('span', { className: 'dspi-empty-glyph' }, glyph(h, 'sections', 28)),
+      h('p', { className: 'dspi-empty-title' }, t('emptyListTitle')),
+      h('p', { className: 'dspi-empty-hint' }, t('emptyListHint')),
+      h('div', { className: 'dspi-empty-action' },
+        h('button', { type: 'button', className: 'dspi-btn dspi-btn--primary', onClick: props.onAdd }, `＋ ${t('addFirst')}`),
       ),
     )
   }
 
-  return h('ol', { className: 'dps-list' }, sections.map((section, index) => h('li', {
+  return h('ol', { className: 'dspi-list' }, sections.map((section, index) => h('li', {
     key: section.id,
-    className: 'dps-list-item',
+    className: 'dspi-list-item',
   }, h(SectionCard, {
     section,
     index,
@@ -1098,17 +1098,17 @@ export function PreviewPanel(props: {
   const copyGlyph: GlyphName = props.copying === 'copied' ? 'check' : props.copying === 'failed' ? 'warning' : 'copy'
 
   return h(React.Fragment, null,
-    h('div', { className: 'dps-section-head', id: 'dsh-prompt-sections-preview' },
-      h('h2', { className: 'dps-section-title' }, t('previewTitle')),
+    h('div', { className: 'dspi-section-head', id: 'dsh-system-prompt-insertion-preview' },
+      h('h2', { className: 'dspi-section-title' }, t('previewTitle')),
       preview === undefined
         ? null
-        : h('span', { className: 'dps-section-meta' }, format(t('previewSummary'), { count: preview.sections.length, bytes: preview.bytes })),
+        : h('span', { className: 'dspi-section-meta' }, format(t('previewSummary'), { count: preview.sections.length, bytes: preview.bytes })),
       preview === undefined
         ? null
-        : h('div', { className: 'dps-section-actions' },
+        : h('div', { className: 'dspi-section-actions' },
           h('button', {
             type: 'button',
-            className: 'dps-btn dps-btn--sm',
+            className: 'dspi-btn dspi-btn--sm',
             onClick: props.onCopy,
             disabled: preview.rendered === '',
             title: props.copying === 'failed' ? t('copyFailedHint') : t('copy'),
@@ -1117,46 +1117,46 @@ export function PreviewPanel(props: {
     ),
     props.previewError === undefined
       ? null
-      : h('div', { className: 'dps-banner dps-banner--error', role: 'alert' },
-        h('span', { className: 'dps-banner-icon' }, glyph(h, 'warning')),
-        h('div', { className: 'dps-banner-text' }, props.previewError),
-        h('button', { type: 'button', className: 'dps-btn dps-btn--sm', onClick: props.onRetry }, t('retry')),
+      : h('div', { className: 'dspi-banner dspi-banner--error', role: 'alert' },
+        h('span', { className: 'dspi-banner-icon' }, glyph(h, 'warning')),
+        h('div', { className: 'dspi-banner-text' }, props.previewError),
+        h('button', { type: 'button', className: 'dspi-btn dspi-btn--sm', onClick: props.onRetry }, t('retry')),
       ),
     preview === undefined
       ? (props.previewError === undefined
-        ? h('div', { className: 'dps-panel dps-panel--idle' }, h('p', null, t('previewNone')))
+        ? h('div', { className: 'dspi-panel dspi-panel--idle' }, h('p', null, t('previewNone')))
         : null)
-      : h('div', { className: 'dps-panel' },
-        props.dirty ? h('p', { className: 'dps-note dps-note--warn' }, t('previewStale')) : null,
-        h('div', { className: 'dps-inline' },
+      : h('div', { className: 'dspi-panel' },
+        props.dirty ? h('p', { className: 'dspi-note dspi-note--warn' }, t('previewStale')) : null,
+        h('div', { className: 'dspi-inline' },
           h('span', null, t('variables')),
           preview.variables.length === 0
             ? h('span', null, '—')
-            : preview.variables.map((name) => h('code', { key: name, className: 'dps-var' }, name)),
+            : preview.variables.map((name) => h('code', { key: name, className: 'dspi-var' }, name)),
         ),
         h('div', null,
-          h('h3', { className: 'dps-subhead' }, t('warnings')),
+          h('h3', { className: 'dspi-subhead' }, t('warnings')),
           preview.warnings.length === 0
-            ? h('div', { className: 'dps-check-row dps-check-row--ok' },
-              h('span', { className: 'dps-check-icon' }, glyph(h, 'check', 12)),
+            ? h('div', { className: 'dspi-check-row dspi-check-row--ok' },
+              h('span', { className: 'dspi-check-icon' }, glyph(h, 'check', 12)),
               h('span', null, t('noWarnings')),
             )
-            : h('ul', { className: 'dps-checks' }, preview.warnings.map((warning, index) => h('li', {
+            : h('ul', { className: 'dspi-checks' }, preview.warnings.map((warning, index) => h('li', {
               key: `${warning.code}-${warning.sectionId ?? index}`,
-              className: 'dps-check-row',
+              className: 'dspi-check-row',
             },
-            h('span', { className: 'dps-check-dot', 'aria-hidden': 'true' }),
+            h('span', { className: 'dspi-check-dot', 'aria-hidden': 'true' }),
             h('span', null, warningText(t, warning)),
             ))),
         ),
-        h('div', { className: 'dps-table-scroll' },
-          h('table', { className: 'dps-table' },
+        h('div', { className: 'dspi-table-scroll' },
+          h('table', { className: 'dspi-table' },
             h('thead', null,
               h('tr', null,
-                h('th', { scope: 'col', className: 'dps-col-index' }, '#'),
-                h('th', { scope: 'col', className: 'dps-col-order' }, t('orderShort')),
+                h('th', { scope: 'col', className: 'dspi-col-index' }, '#'),
+                h('th', { scope: 'col', className: 'dspi-col-order' }, t('orderShort')),
                 h('th', { scope: 'col' }, t('section')),
-                h('th', { scope: 'col', className: 'dps-col-bytes' }, t('bytesShort')),
+                h('th', { scope: 'col', className: 'dspi-col-bytes' }, t('bytesShort')),
               ),
             ),
             h('tbody', null, preview.sections.map((section) => h('tr', {
@@ -1166,22 +1166,22 @@ export function PreviewPanel(props: {
             h('td', null, String(section.index + 1).padStart(2, '0')),
             h('td', null, section.order === undefined ? '—' : String(section.order)),
             h('td', null,
-              h('span', { className: 'dps-name-cell' },
-                h('span', { className: 'dps-name' }, section.name),
-                section.ours ? h('span', { className: 'dps-tag' }, t('ours')) : null,
+              h('span', { className: 'dspi-name-cell' },
+                h('span', { className: 'dspi-name' }, section.name),
+                section.ours ? h('span', { className: 'dspi-tag' }, t('ours')) : null,
               ),
             ),
-            h('td', { className: 'dps-col-bytes' }, `${section.bytes}B`),
+            h('td', { className: 'dspi-col-bytes' }, `${section.bytes}B`),
             ))),
           ),
         ),
-        h('pre', { className: 'dps-pre', tabIndex: 0, 'aria-label': t('previewTitle') }, preview.rendered === '' ? '—' : preview.rendered),
+        h('pre', { className: 'dspi-pre', tabIndex: 0, 'aria-label': t('previewTitle') }, preview.rendered === '' ? '—' : preview.rendered),
       ),
   )
 }
 
 /** The sidebar panel body. */
-function PromptSectionsPanel(props: { t?: (key: string) => string }): unknown {
+function PromptInsertionPanel(props: { t?: (key: string) => string }): unknown {
   const React = require('react') as ReactLike
   const h = React.createElement
   const t = props.t ?? ((key: string): string => key)
@@ -1239,7 +1239,7 @@ function PromptSectionsPanel(props: { t?: (key: string) => string }): unknown {
 
   const revealPreview = React.useCallback(() => {
     if (typeof document === 'undefined' || typeof window === 'undefined') return
-    const node = document.getElementById('dsh-prompt-sections-preview')
+    const node = document.getElementById('dsh-system-prompt-insertion-preview')
     if (node === null) return
     const rect = node.getBoundingClientRect()
     if (rect.top >= 0 && rect.bottom <= window.innerHeight) return
@@ -1376,17 +1376,17 @@ function PromptSectionsPanel(props: { t?: (key: string) => string }): unknown {
     )
   }, [preview])
 
-  const shell = (content: unknown[], footer?: unknown): unknown => h('div', { className: 'dps-root' },
-    h('style', { 'data-dsh-prompt-sections': 'styles' }, PANEL_CSS),
-    h('div', { className: 'dps-scroll' },
-      h('div', { className: 'dps-content' }, ...content)),
+  const shell = (content: unknown[], footer?: unknown): unknown => h('div', { className: 'dspi-root' },
+    h('style', { 'data-dsh-system-prompt-insertion': 'styles' }, PANEL_CSS),
+    h('div', { className: 'dspi-scroll' },
+      h('div', { className: 'dspi-content' }, ...content)),
     footer ?? null,
   )
 
-  const heading = (extra?: unknown, actions?: unknown): unknown => h('header', { className: 'dps-head' },
-    h('div', { className: 'dps-head-main' },
-      h('h1', { className: 'dps-title' }, t('title')),
-      h('p', { className: 'dps-subtitle' }, t('description')),
+  const heading = (extra?: unknown, actions?: unknown): unknown => h('header', { className: 'dspi-head' },
+    h('div', { className: 'dspi-head-main' },
+      h('h1', { className: 'dspi-title' }, t('title')),
+      h('p', { className: 'dspi-subtitle' }, t('description')),
       extra ?? null,
     ),
     actions ?? null,
@@ -1395,25 +1395,25 @@ function PromptSectionsPanel(props: { t?: (key: string) => string }): unknown {
   if (phase === 'loading') {
     return shell([
       heading(),
-      h('div', { className: 'dps-loading', role: 'status' },
-        h('span', { className: 'dps-spinner', 'aria-hidden': 'true' }),
+      h('div', { className: 'dspi-loading', role: 'status' },
+        h('span', { className: 'dspi-spinner', 'aria-hidden': 'true' }),
         h('span', null, t('loading')),
       ),
-      h('div', { className: 'dps-skeleton', 'aria-hidden': 'true' }),
-      h('div', { className: 'dps-skeleton', 'aria-hidden': 'true' }),
+      h('div', { className: 'dspi-skeleton', 'aria-hidden': 'true' }),
+      h('div', { className: 'dspi-skeleton', 'aria-hidden': 'true' }),
     ])
   }
 
   if (phase === 'error' || draft === undefined || payload === undefined) {
     return shell([
       heading(),
-      h('div', { className: 'dps-state' },
-        h('span', { className: 'dps-state-icon' }, glyph(h, 'warning', 16)),
-        h('div', { className: 'dps-state-body' },
-          h('p', { className: 'dps-state-title' }, t('loadFailed')),
-          h('p', { className: 'dps-state-hint' }, withoutPrefix(error, t('loadFailed')) ?? t('loadFailed')),
+      h('div', { className: 'dspi-state' },
+        h('span', { className: 'dspi-state-icon' }, glyph(h, 'warning', 16)),
+        h('div', { className: 'dspi-state-body' },
+          h('p', { className: 'dspi-state-title' }, t('loadFailed')),
+          h('p', { className: 'dspi-state-hint' }, withoutPrefix(error, t('loadFailed')) ?? t('loadFailed')),
         ),
-        h('button', { type: 'button', className: 'dps-btn dps-btn--primary', onClick: refresh }, t('retry')),
+        h('button', { type: 'button', className: 'dspi-btn dspi-btn--primary', onClick: refresh }, t('retry')),
       ),
     ])
   }
@@ -1425,13 +1425,13 @@ function PromptSectionsPanel(props: { t?: (key: string) => string }): unknown {
 
   return shell([
     heading(
-      h('div', { className: 'dps-meta' },
+      h('div', { className: 'dspi-meta' },
         h('span', null, `${t('pathLabel')} `, h('code', { title: payload.path }, payload.path)),
-        h('span', { className: 'dps-origin', 'data-origin': payload.origin }, origin),
+        h('span', { className: 'dspi-origin', 'data-origin': payload.origin }, origin),
         h('span', { title: t('tailBaseHint') }, format(t('tailBase'), { order: payload.orderBases.tailBase })),
       ),
-      h('div', { className: 'dps-head-actions' },
-        h('div', { className: 'dps-master', title: t('enabledHint') },
+      h('div', { className: 'dspi-head-actions' },
+        h('div', { className: 'dspi-master', title: t('enabledHint') },
           h('span', null, t('enabled')),
           h(Switch, {
             checked: draft.enabled,
@@ -1440,16 +1440,16 @@ function PromptSectionsPanel(props: { t?: (key: string) => string }): unknown {
             onChange: (next: boolean) => setDraft({ ...draft, enabled: next }),
           }),
         ),
-        h('button', { type: 'button', className: 'dps-btn dps-btn--outline', onClick: addSection }, `＋ ${t('add')}`),
+        h('button', { type: 'button', className: 'dspi-btn dspi-btn--outline', onClick: addSection }, `＋ ${t('add')}`),
       ),
     ),
 
-    error === undefined ? null : h('div', { className: 'dps-banner dps-banner--error', role: 'alert' },
-      h('span', { className: 'dps-banner-icon' }, glyph(h, 'warning')),
-      h('div', { className: 'dps-banner-text' }, error),
+    error === undefined ? null : h('div', { className: 'dspi-banner dspi-banner--error', role: 'alert' },
+      h('span', { className: 'dspi-banner-icon' }, glyph(h, 'warning')),
+      h('div', { className: 'dspi-banner-text' }, error),
       h('button', {
         type: 'button',
-        className: 'dps-icon-btn',
+        className: 'dspi-icon-btn',
         'aria-label': t('dismiss'),
         title: t('dismiss'),
         onClick: () => setError(undefined),
@@ -1457,16 +1457,16 @@ function PromptSectionsPanel(props: { t?: (key: string) => string }): unknown {
     ),
 
     showStoreWarning
-      ? h('div', { className: 'dps-banner dps-banner--warn', role: 'status' },
-        h('span', { className: 'dps-banner-icon' }, glyph(h, 'warning')),
-        h('div', { className: 'dps-banner-text' }, format(t('warnStoreError'), { message: payload.error ?? '' })),
+      ? h('div', { className: 'dspi-banner dspi-banner--warn', role: 'status' },
+        h('span', { className: 'dspi-banner-icon' }, glyph(h, 'warning')),
+        h('div', { className: 'dspi-banner-text' }, format(t('warnStoreError'), { message: payload.error ?? '' })),
       )
       : null,
 
-    h('section', { className: 'dps-section' },
-      h('div', { className: 'dps-section-head' },
-        h('h2', { className: 'dps-section-title' }, t('sectionsTitle')),
-        h('span', { className: 'dps-section-meta' }, format(t('sectionsSummary'), { count: draft.sections.length, registered })),
+    h('section', { className: 'dspi-section' },
+      h('div', { className: 'dspi-section-head' },
+        h('h2', { className: 'dspi-section-title' }, t('sectionsTitle')),
+        h('span', { className: 'dspi-section-meta' }, format(t('sectionsSummary'), { count: draft.sections.length, registered })),
       ),
       h(SectionList, {
         sections: draft.sections,
@@ -1479,7 +1479,7 @@ function PromptSectionsPanel(props: { t?: (key: string) => string }): unknown {
       }),
     ),
 
-    h('section', { className: 'dps-section' },
+    h('section', { className: 'dspi-section' },
       h(PreviewPanel, {
         preview,
         previewError,
@@ -1491,26 +1491,26 @@ function PromptSectionsPanel(props: { t?: (key: string) => string }): unknown {
       }),
     ),
   ],
-  h('footer', { className: 'dps-footer' },
-    h('div', { className: 'dps-footer-inner' },
-      h('div', { className: 'dps-status', role: 'status', 'aria-live': 'polite' },
-        h('span', { className: 'dps-status-dot', 'data-dirty': dirty || saving ? 'true' : 'false', 'aria-hidden': 'true' }),
+  h('footer', { className: 'dspi-footer' },
+    h('div', { className: 'dspi-footer-inner' },
+      h('div', { className: 'dspi-status', role: 'status', 'aria-live': 'polite' },
+        h('span', { className: 'dspi-status-dot', 'data-dirty': dirty || saving ? 'true' : 'false', 'aria-hidden': 'true' }),
         h('span', null, saving ? t('saving') : dirty ? t('statusDirty') : t('statusSaved')),
       ),
-      h('div', { className: 'dps-footer-actions' },
+      h('div', { className: 'dspi-footer-actions' },
         h('button', {
           type: 'button',
-          className: 'dps-btn',
+          className: 'dspi-btn',
           onClick: () => runPreview({ reveal: true }),
           disabled: previewing,
           title: t('previewLong'),
         }, previewing ? t('previewing') : t('preview')),
         dirty
-          ? h('button', { type: 'button', className: 'dps-btn', onClick: () => setDraft(payload.state) }, t('revert'))
+          ? h('button', { type: 'button', className: 'dspi-btn', onClick: () => setDraft(payload.state) }, t('revert'))
           : null,
         h('button', {
           type: 'button',
-          className: 'dps-btn dps-btn--primary',
+          className: 'dspi-btn dspi-btn--primary',
           onClick: save,
           disabled: !dirty || saving,
           title: saveHint,
@@ -1534,7 +1534,7 @@ export const inject = ['slots', 'locale'] as const
  * @param ctx - the client context carrying `slots` and `locale`.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-prompt-sections: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-system-prompt-insertion: dictionaries')
   const t = ctx.locale.bind(NS)
 
   ctx.effect(() => {
@@ -1551,13 +1551,13 @@ export function apply(ctx: ClientContext): void {
       name: 'main',
       key: PANEL_ID,
       inject: () => ({ t }),
-    }, PromptSectionsPanel))
+    }, PromptInsertionPanel))
 
     return () => {
       offPanel()
       offRow()
     }
-  }, 'dsh-prompt-sections: sidebar panel')
+  }, 'dsh-system-prompt-insertion: sidebar panel')
 }
 
-export { PromptSectionsPanel, PanelIcon, SectionCard, SectionList, Switch, NS, PANEL_ID, PANEL_ORDER, POSITIONS }
+export { PromptInsertionPanel, PanelIcon, SectionCard, SectionList, Switch, NS, PANEL_ID, PANEL_ORDER, POSITIONS }

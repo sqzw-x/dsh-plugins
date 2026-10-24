@@ -1,5 +1,5 @@
 ---
-'dsh-prompt-sections': minor
+'dsh-system-prompt-insertion': minor
 ---
 
 把编辑器从「设置」页挪到左侧栏面板：注册 `sidebar.panellist` 的一行（和 Plugins / 任务时间表同一排）与 `main` 槽里同 id 的面板，设置页不再出现。

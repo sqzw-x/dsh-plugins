@@ -24,7 +24,7 @@
  * it on a LAN, the Origin rule still holds for same-origin requests from that
  * address.
  *
- * @module dsh-prompt-sections/routes
+ * @module dsh-system-prompt-insertion/routes
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
@@ -35,7 +35,7 @@ import type { PromptStore, StoreLogger } from './store.ts'
 import { StateValidationError, type LayerState } from './types.ts'
 
 /** URL prefix of every route this plugin owns. */
-export const ROUTE_PREFIX = '/dsh-prompt-sections'
+export const ROUTE_PREFIX = '/dsh-system-prompt-insertion'
 
 /** Largest accepted request body (the state document is small; 512 KiB is slack). */
 export const MAX_BODY_BYTES: number = 512 * 1024
@@ -162,19 +162,19 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
             const next = deps.store.save(body)
             deps.registrar.sync()
             deps.logger.info(
-              `prompt-sections: saved ${next.sections.length} section(s); ${deps.registrar.registeredNames().length} registered`,
+              `system-prompt-insertion: saved ${next.sections.length} section(s); ${deps.registrar.registeredNames().length} registered`,
             )
             sendJson(res, 200, { ok: true, ...statePayload(deps) })
           } catch (error) {
             if (error instanceof StateValidationError) return reject(res, 422, 'invalid-state', error.message)
             const status = typeof (error as { status?: unknown }).status === 'number' ? (error as { status: number }).status : 500
             const code = typeof (error as { code?: unknown }).code === 'string' ? (error as { code: string }).code : 'write-failed'
-            deps.logger.warn(`prompt-sections: save failed (${code}): ${error instanceof Error ? error.message : String(error)}`)
+            deps.logger.warn(`system-prompt-insertion: save failed (${code}): ${error instanceof Error ? error.message : String(error)}`)
             reject(res, status, code, error instanceof Error ? error.message : String(error))
           }
         },
       }),
-      `prompt-sections: ${ROUTE_PREFIX}/state`,
+      `system-prompt-insertion: ${ROUTE_PREFIX}/state`,
     )
 
     webCtx.effect(
@@ -191,12 +191,12 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
             const preview = await deps.preview()
             sendJson(res, 200, { ok: true, ...preview })
           } catch (error) {
-            deps.logger.warn(`prompt-sections: preview failed: ${error instanceof Error ? error.message : String(error)}`)
+            deps.logger.warn(`system-prompt-insertion: preview failed: ${error instanceof Error ? error.message : String(error)}`)
             reject(res, 500, 'preview-failed', error instanceof Error ? error.message : String(error))
           }
         },
       }),
-      `prompt-sections: ${ROUTE_PREFIX}/preview`,
+      `system-prompt-insertion: ${ROUTE_PREFIX}/preview`,
     )
   })
 }

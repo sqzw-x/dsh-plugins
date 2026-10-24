@@ -1,6 +1,6 @@
-# dsh-prompt-sections
+# dsh-system-prompt-insertion
 
-> 给 DeepSeek Harness 的 **system prompt** 加你自己的段落：写在左侧栏的面板里，落到开头 / 中间 / 最末尾，改完下一个请求生效。
+> 把你的文字注入 DeepSeek Harness 的 **system prompt**：写在左侧栏的面板里，落到开头 / 中间 / 最末尾，改完下一个请求生效。
 
 [English](#english) | 简体中文
 
@@ -8,16 +8,16 @@
 
 ## 它解决什么
 
-DSH 每一步都会把 system prompt 按「段落 + order」重新组装。这个插件让你往里加**自己的**段落：
+DSH 每一步都会把 system prompt 按「段落 + order」重新组装。这个插件让你把**自己的**文字作为 system 段落注入进去：
 
 | 你能做的事 | 怎么做 |
 |---|---|
-| 在提示词最末尾补一段话 | 新建段落 → 位置选「末尾」 |
-| 在人格之后、工具说明之前插规则 | 位置选「开头」 |
-| 在工具说明之后加工作约定 | 位置选「中间」 |
+| 在提示词最末尾注入一段话 | 新建段落 → 位置选「末尾」 |
+| 在人格之后、工具说明之前注入规则 | 位置选「开头」 |
+| 在工具说明之后注入工作约定 | 位置选「中间」 |
 | 临时关掉某一段 | 段落上的「启用」开关 |
 | 看清最终发给模型的是什么 | 「预览当前系统提示词」 |
-| 手工/脚本维护 | 直接编辑 `~/.dsh/prompt-sections.json` |
+| 手工/脚本维护 | 直接编辑 `~/.dsh/system-prompt-insertion.json` |
 
 和 `AGENTS.md` 的区别是**优先级来源**：`AGENTS.md` 以 **user 角色消息**注入，信封里明确写着它不覆盖 system 指令；本插件注册的是真正的 `system` 段落，与平台自己的指令同层。
 
@@ -25,13 +25,13 @@ DSH 每一步都会把 system prompt 按「段落 + order」重新组装。这�
 
 ```sh
 # 本地检出（开发用，link 方式，改完 build 即生效）
-dsh plugin --profile web add link:~/projects/dsh-plugins/packages/dsh-prompt-sections
+dsh plugin --profile web add link:~/projects/dsh-plugins/packages/dsh-system-prompt-insertion
 
 # 发布后
-dsh plugin --profile web add dsh-prompt-sections
+dsh plugin --profile web add dsh-system-prompt-insertion
 ```
 
-装完**重启一次 DSH**（新 bundle 需要宿主重新引导），左侧栏底部会多出一个「提示词段落」图标（和 Plugins / 任务时间表 / 上下文档同一排），点开就是面板。以后改代码只需 `npm run build` 再刷新页面。
+装完**重启一次 DSH**（新 bundle 需要宿主重新引导），左侧栏底部会多出一个「提示词注入」图标（和 Plugins / 任务时间表 / 上下文档同一排），点开就是面板。以后改代码只需 `npm run build` 再刷新页面。
 
 ## 三个落点
 
@@ -41,13 +41,13 @@ dsh plugin --profile web add dsh-prompt-sections
 | 中间 | `5100` | 所有工具说明（1000–3100）、SDK 段（5000）之后 |
 | 末尾 | 宿主 `deployment:persona-suffix` + 300 | 宿主最后一段之后——即提示词真正的结尾 |
 
-同一落点里按编辑器顺序每段 +10。段位基数是**运行时**从宿主读的（`getSectionOrder('DEPLOYMENT_PERSONA_SUFFIX')`），所以宿主升级调了顺序，我们的文字不会被挤到工具说明前面。
+同一落点里按编辑器顺序每段 +10。末尾段的 order 基数是**运行时**从宿主读的（`getSectionOrder('DEPLOYMENT_PERSONA_SUFFIX')`），所以宿主升级调了顺序，我们的文字也不会被挤到工具说明前面。
 
-需要精确控制时，可在状态文件里给某段写 `order: 12345`，它优先于位置档位。
+需要精确控制时，可在状态文件里给某段写 `order: 12345`，它优先于按位置推算的 order。
 
 ## 为什么不会被「预设」遮掉
 
-遮蔽按**段落名字**匹配。预设里的 persona 行占用 `deployment:persona-prefix` / `deployment:persona-suffix` 这两个名字，而本插件的段落叫 `user:prompt-sections:<id>`——名字不重合，全局层因此对所有 agent 生效（含子代理、工作流子代理）。
+遮蔽按**段落名字**匹配。预设里的 persona 行占用 `deployment:persona-prefix` / `deployment:persona-suffix` 这两个名字，而本插件的段落叫 `user:system-prompt-insertion:<id>`——名字不重合，全局层因此对所有 agent 生效（含子代理、工作流子代理）。
 
 唯一的例外：预设把 persona 设成 `complete: true`（内置 `minimal` 就是），整份提示词只剩那一段，任何追加都会被丢弃。**预览会直接标注这种情况**，不会假装生效。
 
@@ -70,7 +70,7 @@ dsh plugin --profile web add dsh-prompt-sections
 
 ## 状态文件
 
-默认 `~/.dsh/prompt-sections.json`（`$DSH_HOME` 优先），权限 `0600`，原子写入。也可以手工编辑——文件变化会被发现，正文改动下一个请求就生效，结构改动（增删/移动/启停）由监听器重建注册。
+默认 `~/.dsh/system-prompt-insertion.json`（`$DSH_HOME` 优先），权限 `0600`，原子写入。也可以手工编辑——文件变化会被发现，正文改动下一个请求就生效，结构改动（增删/移动/启停）由监听器重建注册。
 
 ```json
 {
@@ -98,7 +98,7 @@ dsh plugin --profile web add dsh-prompt-sections
 | `title` | 编辑器里的显示名（≤80 字符） |
 | `text` | 正文，UTF-8 ≤256 KiB |
 | `position` | `head` / `body` / `tail` |
-| `order` | 数字则覆盖位置档位；`null` 表示跟随位置 |
+| `order` | 数字则覆盖按位置推算的 order；`null` 表示跟随位置 |
 | `enabled` | 是否注册 |
 | `interpolate` | `true` 才解析 `{{model}}` / `{{provider}}`；`false` 原样进入提示词 |
 
@@ -107,11 +107,11 @@ dsh plugin --profile web add dsh-prompt-sections
 ## 配置（profile 行）
 
 ```yaml
-- id: prompt-sections
-  name: dsh-prompt-sections
+- id: system-prompt-insertion
+  name: dsh-system-prompt-insertion
   config:
     enabled: true            # 总开关；false 时什么都不注册
-    storeFile: ''            # 覆盖状态文件路径，空 = $DSH_HOME/prompt-sections.json
+    storeFile: ''            # 覆盖状态文件路径，空 = $DSH_HOME/system-prompt-insertion.json
     maxSectionBytes: 8192    # 单段软上限，只在 UI 里提示，不截断
 ```
 
@@ -123,9 +123,9 @@ dsh plugin --profile web add dsh-prompt-sections
 
 | 方法 | 路径 | 用途 |
 |---|---|---|
-| `GET` | `/dsh-prompt-sections/state` | 读状态、文件路径、已注册段落、宿主段位基数 |
-| `POST` | `/dsh-prompt-sections/state` | 校验 + 持久化 + 重建注册 |
-| `GET` | `/dsh-prompt-sections/preview` | 真实组装 + 渲染 + 告警 |
+| `GET` | `/dsh-system-prompt-insertion/state` | 读状态、文件路径、已注册段落、宿主末尾段的 order 基数 |
+| `POST` | `/dsh-system-prompt-insertion/state` | 校验 + 持久化 + 重建注册 |
+| `GET` | `/dsh-system-prompt-insertion/preview` | 真实组装 + 渲染 + 告警 |
 
 防护：`Origin` 与 `Host` 不一致拒绝（403）、写请求必须 `application/json`（415）、请求体上限 512 KiB（413）、非法文档 422。
 
@@ -162,12 +162,12 @@ src/client.ts     侧栏行 + 面板（仅 react，无宿主客户端包）
 
 ## English
 
-`dsh-prompt-sections` adds **user-owned system-prompt sections** to DeepSeek Harness. Write text in a left-column sidebar panel, place it at the head, the middle, or the true tail of the assembled prompt, and it applies on the next model step — no restart.
+`dsh-system-prompt-insertion` lets you inject **user-owned text** into the DeepSeek Harness system prompt as ordered sections. Write it in a left-column sidebar panel, place it at the head, the middle, or the true tail of the assembled prompt, and it applies on the next model step, with no restart.
 
-- Host half registers one `ctx.systemPrompt.section()` per enabled entry at `user:prompt-sections:<id>`; global scope, so presets cannot shadow it (except a `complete: true` persona preset, which the preview reports).
+- Host half registers one `ctx.systemPrompt.section()` per enabled entry at `user:system-prompt-insertion:<id>`; global scope, so presets cannot shadow it (except a `complete: true` persona preset, which the preview reports).
 - Browser half is a sidebar panel: a row in the shell's own panel list (`sidebar.panellist`) plus its page in the keyed `main` slot, so the shell keeps the button, label, active highlight and collapsed rail.
 - The panel is single-column — heading, section cards, preview — with a save bar pinned to the bottom (`⌘S` / `Ctrl+S` works too). Every colour comes from `--dsw-*` tokens, so light, dark and skin themes follow automatically.
-- The preview is produced by the host's real `assemble()` + `renderPrompt()`, refreshed after each save, and can be copied whole; checks name empty sections, repeated lines, unknown variables and oversize text.
+- The preview is produced by the host's real `assemble()` + `renderPrompt()`, refreshed after each save, and can be copied whole; checks flag empty sections, repeated lines, unknown variables and oversize text.
 - One JSON document is the single source of truth; atomic writes, `0600`, change detection, and strict validation (unknown fields are rejected rather than dropped).
 
 MIT.

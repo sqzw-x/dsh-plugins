@@ -14,7 +14,7 @@
  *    the preview reports them as hidden instead of showing text that will not be
  *    sent.
  *
- * @module dsh-prompt-sections/preview
+ * @module dsh-system-prompt-insertion/preview
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { renderPrompt, type PromptAssembly } from '@deepseek-ai/dsh-system-prompt'

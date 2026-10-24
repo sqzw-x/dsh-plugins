@@ -1,7 +1,7 @@
 {
-  "name": "dsh-prompt-sections",
+  "name": "dsh-system-prompt-insertion",
   "version": "0.1.0",
-  "description": "User-owned system-prompt sections for DeepSeek Harness: write extra prompt text, place it anywhere in the assembled prompt, and edit it from a left-column Web panel with a live preview.",
+  "description": "User-owned system-prompt insertion for DeepSeek Harness: place your own text at the head, middle, or tail of the assembled prompt, and edit it from a left-column Web panel with a live preview.",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -28,6 +28,7 @@
     "dsh",
     "dsh-plugin",
     "system-prompt",
+    "prompt-insertion",
     "prompt",
     "instructions",
     "sidebar",
@@ -86,9 +87,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sqzw-x/dsh-plugins.git",
-    "directory": "packages/dsh-prompt-sections"
+    "directory": "packages/dsh-system-prompt-insertion"
   },
-  "homepage": "https://github.com/sqzw-x/dsh-plugins/tree/main/packages/dsh-prompt-sections#readme",
+  "homepage": "https://github.com/sqzw-x/dsh-plugins/tree/main/packages/dsh-system-prompt-insertion#readme",
   "bugs": {
     "url": "https://github.com/sqzw-x/dsh-plugins/issues"
   },

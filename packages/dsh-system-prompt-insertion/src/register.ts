@@ -7,7 +7,7 @@
  * section in the global layer. That is deliberate: the global layer is merged into
  * every agent's assembly, so one row covers the Web session, subagents and
  * workflow children alike — and a preset cannot shadow it, because shadowing is
- * keyed by section NAME and our names (`user:prompt-sections:<id>`) are never used
+ * keyed by section NAME and our names (`user:system-prompt-insertion:<id>`) are never used
  * by the harness or by a preset's persona row.
  *
  * The one exception is a preset that mounts `dsh-persona` with `complete: true`
@@ -23,7 +23,7 @@
  * {@link SectionRegistrar.sync} rebuilds it, and a file watcher calls `sync` when
  * the store changes underneath us.
  *
- * @module dsh-prompt-sections/register
+ * @module dsh-system-prompt-insertion/register
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -108,7 +108,7 @@ export class SectionRegistrar {
         this.orderByName.set(entry.name, entry.order)
       } catch (error) {
         this.logger.warn(
-          `prompt-sections: cannot register "${section.id}" at order ${entry.order}: ${error instanceof Error ? error.message : String(error)}`,
+          `system-prompt-insertion: cannot register "${section.id}" at order ${entry.order}: ${error instanceof Error ? error.message : String(error)}`,
         )
       }
     }

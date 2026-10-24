@@ -21,7 +21,7 @@
  * worse than serving a slightly stale one), and the parse error is surfaced to
  * the UI through {@link PromptStore.lastError}.
  *
- * @module dsh-prompt-sections/store
+ * @module dsh-system-prompt-insertion/store
  */
 import { chmodSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -193,7 +193,7 @@ export class PromptStore {
         : error instanceof Error
           ? error.message
           : String(error)
-      this.logger.warn(`prompt-sections: cannot read ${displayPath(this.path)} (${this.error}); keeping the previous state`)
+      this.logger.warn(`system-prompt-insertion: cannot read ${displayPath(this.path)} (${this.error}); keeping the previous state`)
     }
   }
 }

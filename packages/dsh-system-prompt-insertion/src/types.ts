@@ -3,13 +3,13 @@
  *
  * ## One source of truth
  *
- * Everything the model sees comes from one JSON file (`state.json` under
- * `$DSH_HOME/prompt-sections/`). The profile row's `config` only carries
+ * Everything the model sees comes from one JSON file
+ * (`$DSH_HOME/system-prompt-insertion.json`). The profile row's `config` only carries
  * deployment-level switches (master switch, file override, soft size cap) — never
  * prompt text — so there is exactly one place a section can be edited, and the
  * Web editor and a hand-edited file cannot disagree.
  *
- * @module dsh-prompt-sections/types
+ * @module dsh-system-prompt-insertion/types
  */
 
 /** Where a section lands inside the assembled system prompt. */
@@ -50,7 +50,7 @@ export interface LayerState {
 export const SECTION_ID: RegExp = /^[a-z0-9][a-z0-9-]{5,39}$/
 
 /** Section-name prefix; also how the preview tells our sections apart. */
-export const SECTION_PREFIX: string = 'user:prompt-sections:'
+export const SECTION_PREFIX: string = 'user:system-prompt-insertion:'
 
 /** Upper bound on a stored section text, in UTF-8 bytes. */
 export const MAX_TEXT_BYTES: number = 256 * 1024

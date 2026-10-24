@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "System prompt insertion",
+    "description": "In a sidebar panel, place your own text at the head, middle, or tail of the system prompt, with a live preview of the whole prompt."
+  }
+}

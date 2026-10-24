@@ -1,12 +1,14 @@
 /**
- * `dsh-prompt-sections` — user-owned sections of the DeepSeek Harness system prompt.
+ * `dsh-system-prompt-insertion` — user-owned text injected into the DeepSeek
+ * Harness system prompt.
  *
  * ## What it adds
  *
  * The harness assembles one system prompt per model step from ordered sections
- * contributed by plugins. This plugin contributes sections the USER owns: written
- * in the Web editor (or a JSON file), placed at the head, the middle, or the very
- * tail of that prompt, and rendered on every step with no restart.
+ * contributed by plugins. This plugin lets the USER inject their own text as
+ * those sections: written in the Web editor (or a JSON file), placed at the head,
+ * the middle, or the very tail of that prompt, and rendered on every step with
+ * no restart.
  *
  * A "section" is the harness's own unit of prompt composition, so user text lands
  * in the same layer as the platform's own instructions — unlike `AGENTS.md`, which
@@ -32,7 +34,7 @@
  * The row's `config` holds deployment switches only — never prompt text — so the
  * editor and a hand-edited file cannot disagree about what is live.
  *
- * @module dsh-prompt-sections
+ * @module dsh-system-prompt-insertion
  */
 import { watchFile, unwatchFile } from 'node:fs'
 import type { Context } from '@deepseek-ai/cordis'
@@ -45,7 +47,7 @@ import { buildPreview } from './preview.ts'
 import { registerRoutes } from './routes.ts'
 
 /** Cordis plugin name. */
-export const name = 'prompt-sections'
+export const name = 'system-prompt-insertion'
 
 /** The prompt registry must exist before a section can be registered. */
 export const inject: string[] = ['systemPrompt']
@@ -60,7 +62,7 @@ const WATCH_INTERVAL_MS = 1000
 export interface Config {
   /** Master switch: `false` registers nothing and serves no routes. */
   enabled: boolean
-  /** State file override; empty uses `$DSH_HOME/prompt-sections.json`. */
+  /** State file override; empty uses `$DSH_HOME/system-prompt-insertion.json`. */
   storeFile: string
   /** Soft per-section size cap reported by the editor. */
   maxSectionBytes: number
@@ -69,9 +71,9 @@ export interface Config {
 /** Schema for {@link Config}. */
 export const Config: Schema<Config> = Schema.object({
   enabled: Schema.boolean().default(true)
-    .description('Register the stored prompt sections.'),
+    .description('Add the stored text to the system prompt as sections.'),
   storeFile: Schema.string().default('')
-    .description('Path of the state file. Empty uses $DSH_HOME/prompt-sections.json.'),
+    .description('Path of the state file. Empty uses $DSH_HOME/system-prompt-insertion.json.'),
   maxSectionBytes: Schema.number().default(8192)
     .description('Soft per-section size cap the editor reports; nothing is truncated.'),
 })
@@ -93,7 +95,7 @@ export interface ResolvedOptions {
 export function resolveOptions(config: Config): ResolvedOptions {
   const configured = config.storeFile.trim()
   return {
-    storeFile: configured === '' ? dshHomePath('prompt-sections.json') : expandHomePath(configured),
+    storeFile: configured === '' ? dshHomePath('system-prompt-insertion.json') : expandHomePath(configured),
     maxSectionBytes: Number.isFinite(config.maxSectionBytes) && config.maxSectionBytes > 0
       ? config.maxSectionBytes
       : 8192,
@@ -101,7 +103,7 @@ export function resolveOptions(config: Config): ResolvedOptions {
 }
 
 /**
- * Mount the prompt sections and their editor.
+ * Mount the user-owned system-prompt text and its editor.
  *
  * @param ctx - the profile row's context.
  * @param config - the validated row configuration.
@@ -109,7 +111,7 @@ export function resolveOptions(config: Config): ResolvedOptions {
 export function apply(ctx: Context, config: Config): void {
   const logger = ctx.logger
   if (!config.enabled) {
-    logger.info('prompt-sections: disabled by configuration')
+    logger.info('system-prompt-insertion: disabled by configuration')
     return
   }
 
@@ -117,7 +119,7 @@ export function apply(ctx: Context, config: Config): void {
   const store = new PromptStore({ path: options.storeFile, logger })
   const registrar = new SectionRegistrar(ctx, store, logger)
 
-  ctx.effect(() => () => registrar.dispose(), 'prompt-sections: registrations')
+  ctx.effect(() => () => registrar.dispose(), 'system-prompt-insertion: registrations')
 
   // Out-of-band edits (vim, another tool, a restored backup) change the PLAN as
   // well as the text: a reordered or disabled section only moves when the plan is
@@ -130,9 +132,9 @@ export function apply(ctx: Context, config: Config): void {
         timer = undefined
         try {
           registrar.sync()
-          logger.info(`prompt-sections: reloaded ${registrar.registeredNames().length} section(s) after a file change`)
+          logger.info(`system-prompt-insertion: reloaded ${registrar.registeredNames().length} section(s) after a file change`)
         } catch (error) {
-          logger.warn(`prompt-sections: reload failed: ${error instanceof Error ? error.message : String(error)}`)
+          logger.warn(`system-prompt-insertion: reload failed: ${error instanceof Error ? error.message : String(error)}`)
         }
       }, WATCH_DEBOUNCE_MS)
       timer.unref?.()
@@ -142,7 +144,7 @@ export function apply(ctx: Context, config: Config): void {
       if (timer !== undefined) clearTimeout(timer)
       unwatchFile(options.storeFile, onChange)
     }
-  }, 'prompt-sections: state watcher')
+  }, 'system-prompt-insertion: state watcher')
 
   registerRoutes(ctx, {
     store,
@@ -153,7 +155,7 @@ export function apply(ctx: Context, config: Config): void {
 
   const state = registrar.sync()
   logger.info(
-    `prompt-sections: ${registrar.registeredNames().length} of ${state.sections.length} section(s) registered from ${store.displayPath()}`,
+    `system-prompt-insertion: ${registrar.registeredNames().length} of ${state.sections.length} section(s) registered from ${store.displayPath()}`,
   )
 }
 

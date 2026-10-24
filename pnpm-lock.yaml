@@ -329,7 +329,7 @@ importers:
         specifier: 'catalog:'
         version: 7.0.2
 
-  packages/dsh-prompt-sections:
+  packages/dsh-system-prompt-insertion:
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: 'catalog:'

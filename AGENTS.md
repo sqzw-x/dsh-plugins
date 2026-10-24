@@ -11,7 +11,7 @@
 | `packages/dsh-focus-notify` | 回合结束聚焦提醒 / 系统通知（host + Web UI） |
 | `packages/dsh-lan-link` | 局域网访问（host，TypeScript） |
 | `packages/dsh-notes-context` | 笔记式上下文压缩（host） |
-| `packages/dsh-prompt-sections` | 系统提示词段落编辑器（host + Web UI） |
+| `packages/dsh-system-prompt-insertion` | 系统提示词注入编辑器（host + Web UI） |
 | `tooling/dsh-plugin-toolkit` | 构建预设 `pluginBuild()`、测试替身、产物契约 |
 | `.agents/skills/` | agent 技能目录（不 vendored，见其中 README） |
 
@@ -24,7 +24,7 @@ pnpm --filter dsh-notes-context verify   # 只跑一个包（包名，不是目�
 pnpm build                               # 构建全部（TS 包）
 ```
 
-跑单个包时用**包名**：`dsh-focus-notify`、`dsh-lan-link`、`dsh-notes-context`、`dsh-prompt-sections`。
+跑单个包时用**包名**：`dsh-focus-notify`、`dsh-lan-link`、`dsh-notes-context`、`dsh-system-prompt-insertion`。
 
 ## 硬性约定
 

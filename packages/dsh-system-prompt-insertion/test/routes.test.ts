@@ -78,7 +78,7 @@ function response() {
 
 /** Mount the routes over a temp store and return a caller helper. */
 async function withRoutes(t) {
-  const dir = mkdtempSync(join(tmpdir(), 'prompt-sections-routes-'))
+  const dir = mkdtempSync(join(tmpdir(), 'system-prompt-insertion-routes-'))
   const file = join(dir, 'state.json')
   writeFileSync(file, JSON.stringify(emptyState()), 'utf8')
   t.after(() => rmSync(dir, { recursive: true, force: true }))
@@ -114,7 +114,7 @@ async function withRoutes(t) {
 
 test('GET /state returns the document, path and registered names', async (t) => {
   const { call } = await withRoutes(t)
-  const result = await call('/dsh-prompt-sections/state', 'GET')
+  const result = await call('/dsh-system-prompt-insertion/state', 'GET')
   assert.equal(result.status, 200)
   assert.equal(result.json.ok, true)
   assert.deepEqual(result.json.state, emptyState())
@@ -138,18 +138,18 @@ test('POST /state persists, registers and answers with the new document', async 
       interpolate: false,
     }],
   }
-  const result = await call('/dsh-prompt-sections/state', 'POST', document)
+  const result = await call('/dsh-system-prompt-insertion/state', 'POST', document)
   assert.equal(result.status, 200)
   assert.equal(result.json.ok, true)
-  assert.deepEqual(result.json.registered, ['user:prompt-sections:s-abcdef'])
-  assert.deepEqual(registrar.registeredNames(), ['user:prompt-sections:s-abcdef'])
+  assert.deepEqual(result.json.registered, ['user:system-prompt-insertion:s-abcdef'])
+  assert.deepEqual(registrar.registeredNames(), ['user:system-prompt-insertion:s-abcdef'])
   assert.equal(JSON.parse(readFileSync(file, 'utf8')).sections[0].text, 'SAVED-TEXT')
 })
 
 test('POST /state rejects an invalid document with 422 and keeps the file intact', async (t) => {
   const { call, file } = await withRoutes(t)
   const before = readFileSync(file, 'utf8')
-  const result = await call('/dsh-prompt-sections/state', 'POST', {
+  const result = await call('/dsh-system-prompt-insertion/state', 'POST', {
     version: 1,
     enabled: true,
     sections: [{ id: 'NOPE', title: 'x', text: 'y', position: 'tail', order: null, enabled: true, interpolate: false }],
@@ -162,22 +162,22 @@ test('POST /state rejects an invalid document with 422 and keeps the file intact
 
 test('writes require JSON and a same-origin request', async (t) => {
   const { call } = await withRoutes(t)
-  const wrongType = await call('/dsh-prompt-sections/state', 'POST', undefined, { 'content-type': 'text/plain' })
+  const wrongType = await call('/dsh-system-prompt-insertion/state', 'POST', undefined, { 'content-type': 'text/plain' })
   // No body means no content-type header was synthesized; the handler still
   // refuses a non-JSON write.
   assert.equal(wrongType.status, 415)
 
-  const crossSite = await call('/dsh-prompt-sections/state', 'POST', emptyState(), { origin: 'https://evil.example' })
+  const crossSite = await call('/dsh-system-prompt-insertion/state', 'POST', emptyState(), { origin: 'https://evil.example' })
   assert.equal(crossSite.status, 403)
   assert.equal(crossSite.json.error.code, 'cross-origin')
 
-  const sameSite = await call('/dsh-prompt-sections/state', 'POST', emptyState(), { origin: 'http://127.0.0.1:54587' })
+  const sameSite = await call('/dsh-system-prompt-insertion/state', 'POST', emptyState(), { origin: 'http://127.0.0.1:54587' })
   assert.equal(sameSite.status, 200)
 })
 
 test('GET /preview assembles the current prompt', async (t) => {
   const { call } = await withRoutes(t)
-  await call('/dsh-prompt-sections/state', 'POST', {
+  await call('/dsh-system-prompt-insertion/state', 'POST', {
     version: 1,
     enabled: true,
     sections: [{
@@ -190,7 +190,7 @@ test('GET /preview assembles the current prompt', async (t) => {
       interpolate: false,
     }],
   })
-  const result = await call('/dsh-prompt-sections/preview', 'GET')
+  const result = await call('/dsh-system-prompt-insertion/preview', 'GET')
   assert.equal(result.status, 200)
   assert.match(result.json.rendered, /PREVIEW-FROM-ROUTE/)
   assert.ok(Array.isArray(result.json.sections))
@@ -199,7 +199,7 @@ test('GET /preview assembles the current prompt', async (t) => {
 
 test('an unsupported method is refused with 405', async (t) => {
   const { call } = await withRoutes(t)
-  const result = await call('/dsh-prompt-sections/state', 'DELETE')
+  const result = await call('/dsh-system-prompt-insertion/state', 'DELETE')
   assert.equal(result.status, 405)
   assert.equal(result.json.error.code, 'method-not-allowed')
   assert.match(String(result.headers.allow), /GET, POST/)

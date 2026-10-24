@@ -40,7 +40,7 @@ function section(overrides) {
  * disposable child fiber, so the file watcher is torn down with the test.
  */
 async function withHost(t, sections) {
-  const dir = mkdtempSync(join(tmpdir(), 'prompt-sections-'))
+  const dir = mkdtempSync(join(tmpdir(), 'system-prompt-insertion-'))
   const file = join(dir, 'state.json')
   t.after(() => rmSync(dir, { recursive: true, force: true }))
 
@@ -52,7 +52,7 @@ async function withHost(t, sections) {
   writeFileSync(file, JSON.stringify(seed), 'utf8')
 
   const fiber = ctx.plugin({
-    name: 'prompt-sections-under-test',
+    name: 'system-prompt-insertion-under-test',
     inject: ['systemPrompt'],
     apply: (child) => apply(child, { enabled: true, storeFile: file, maxSectionBytes: 8192 }),
   })
@@ -73,11 +73,11 @@ test('a tail section renders after every host section', async (t) => {
   const { assembly, rendered } = await assemble()
   assert.ok(rendered.endsWith('ANSWER-IN-CHINESE'), rendered)
   const names = assembly.sections.map((entry) => entry.name)
-  assert.equal(names.at(-1), 'user:prompt-sections:s-abcdef')
+  assert.equal(names.at(-1), 'user:system-prompt-insertion:s-abcdef')
   // The deployment persona suffix (10200) is the host's own last section.
   const order = assembly.sections.findIndex((entry) => entry.name === 'deployment:persona-suffix')
   assert.ok(order >= 0)
-  assert.equal(names.indexOf('user:prompt-sections:s-abcdef'), names.length - 1)
+  assert.equal(names.indexOf('user:system-prompt-insertion:s-abcdef'), names.length - 1)
 })
 
 test('a head section lands after the persona and before the tail', async (t) => {
@@ -87,8 +87,8 @@ test('a head section lands after the persona and before the tail', async (t) => 
   ])
   const { assembly } = await assemble()
   const names = assembly.sections.map((entry) => entry.name)
-  assert.ok(names.indexOf('deployment:persona-prefix') < names.indexOf('user:prompt-sections:s-aaaaaa'))
-  assert.ok(names.indexOf('user:prompt-sections:s-aaaaaa') < names.indexOf('user:prompt-sections:s-bbbbbb'))
+  assert.ok(names.indexOf('deployment:persona-prefix') < names.indexOf('user:system-prompt-insertion:s-aaaaaa'))
+  assert.ok(names.indexOf('user:system-prompt-insertion:s-aaaaaa') < names.indexOf('user:system-prompt-insertion:s-bbbbbb'))
 })
 
 test('disabled and empty sections are not registered', async (t) => {
@@ -99,7 +99,7 @@ test('disabled and empty sections are not registered', async (t) => {
   ])
   const { assembly, rendered } = await assemble()
   const names = assembly.sections.map((entry) => entry.name)
-  assert.deepEqual(names.filter((name) => name.startsWith('user:prompt-sections:')), ['user:prompt-sections:s-aaaaaa'])
+  assert.deepEqual(names.filter((name) => name.startsWith('user:system-prompt-insertion:')), ['user:system-prompt-insertion:s-aaaaaa'])
   assert.ok(!rendered.includes('HIDDEN'))
 })
 
@@ -122,7 +122,7 @@ test('an explicit order overrides the band', async (t) => {
   const { assembly } = await assemble()
   // Registered at 10400: after the persona suffix (10200), before our own tail band.
   const names = assembly.sections.map((entry) => entry.name)
-  assert.ok(names.indexOf('deployment:persona-suffix') < names.indexOf('user:prompt-sections:s-abcdef'))
+  assert.ok(names.indexOf('deployment:persona-suffix') < names.indexOf('user:system-prompt-insertion:s-abcdef'))
 })
 
 test('interpolate: false keeps brace groups literal', async (t) => {
@@ -132,7 +132,7 @@ test('interpolate: false keeps brace groups literal', async (t) => {
 })
 
 test('SectionRegistrar.sync follows structural changes in the store', async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), 'prompt-sections-sync-'))
+  const dir = mkdtempSync(join(tmpdir(), 'system-prompt-insertion-sync-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   const file = join(dir, 'state.json')
   writeFileSync(file, JSON.stringify(emptyState()), 'utf8')
@@ -148,7 +148,7 @@ test('SectionRegistrar.sync follows structural changes in the store', async (t) 
 
   store.save({ version: 1, enabled: true, sections: [section({ id: 's-aaaaaa', text: 'ADDED-LATER' })] })
   registrar.sync()
-  assert.deepEqual(registrar.registeredNames(), ['user:prompt-sections:s-aaaaaa'])
+  assert.deepEqual(registrar.registeredNames(), ['user:system-prompt-insertion:s-aaaaaa'])
 
   const assembly = await ctx.systemPrompt.assemble({})
   assert.match(renderPrompt(assembly), /ADDED-LATER/)
@@ -186,7 +186,7 @@ test('preview warns about an unknown variable under interpolation', async (t) =>
 })
 
 test('a scope-less preview substitutes per-agent variables instead of failing', async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), 'prompt-sections-scope-'))
+  const dir = mkdtempSync(join(tmpdir(), 'system-prompt-insertion-scope-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   const file = join(dir, 'state.json')
   writeFileSync(file, JSON.stringify({
@@ -225,7 +225,7 @@ test('planRegistrations keeps disabled slots stable', () => {
       ],
     },
     { tailBase: 10200 },
-    'user:prompt-sections:',
+    'user:system-prompt-insertion:',
   )
   assert.deepEqual(plan.map((entry) => entry.order), [10500, 10520])
 })

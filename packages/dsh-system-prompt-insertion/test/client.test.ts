@@ -42,7 +42,7 @@ function loadClient() {
   // The bundle is a plain script that calls window.__ModuleLoader__.load(...).
   new Function('window', 'require', bundle)(window, require)
   assert.ok(loaded, 'the bundle registers itself with the module table')
-  assert.equal(loaded.id, 'dsh-prompt-sections')
+  assert.equal(loaded.id, 'dsh-system-prompt-insertion')
   return loaded.factory(require)
 }
 
@@ -126,19 +126,19 @@ test('the browser bundle registers a sidebar row and the panel it opens', () => 
 
   const [row, panel] = fake.registered
   assert.equal(row.options.name, 'sidebar.panellist')
-  assert.equal(row.options.id, 'prompt-sections')
+  assert.equal(row.options.id, 'system-prompt-insertion')
   assert.equal(row.options.order, 30)
   assert.equal(typeof row.options.label, 'function')
-  assert.equal(row.options.label(), 'dsh-prompt-sections.nav')
+  assert.equal(row.options.label(), 'dsh-system-prompt-insertion.nav')
   // The row draws only the glyph; the shell owns the button.
   assert.equal(typeof row.component, 'function')
   const icon = row.component({ size: 18, active: true })
   assert.equal(icon.type, 'svg')
   assert.equal(icon.props.width, 18)
-  assert.equal(icon.props['data-dsh-panel-entry'], 'prompt-sections')
+  assert.equal(icon.props['data-dsh-panel-entry'], 'system-prompt-insertion')
 
   assert.equal(panel.options.name, 'main')
-  assert.equal(panel.options.key, 'prompt-sections')
+  assert.equal(panel.options.key, 'system-prompt-insertion')
   assert.equal(typeof panel.options.inject, 'function')
   assert.equal(typeof panel.options.inject().t, 'function')
   assert.equal(typeof panel.component, 'function')
@@ -166,11 +166,11 @@ test('the panel renders its first paint without touching the network', () => {
   assert.ok(tree, 'the component returns an element')
   assert.equal(tree.type, 'div')
   // The root owns the whole center column and ships its own scoped stylesheet.
-  assert.equal(tree.props.className, 'dps-root')
+  assert.equal(tree.props.className, 'dspi-root')
   const styles = findAll(tree, (node) => node.type === 'style')
   assert.equal(styles.length, 1)
-  assert.equal(styles[0].props['data-dsh-prompt-sections'], 'styles')
-  assert.match(textOf(styles[0]), /\.dps-root/)
+  assert.equal(styles[0].props['data-dsh-system-prompt-insertion'], 'styles')
+  assert.match(textOf(styles[0]), /\.dspi-root/)
   // The loading branch is what a host that never answers shows.
   assert.match(textOf(tree), /loading/)
 })
@@ -181,7 +181,7 @@ test('both locale dictionaries are registered with the same keys', () => {
   module.apply(fake.ctx)
   assert.equal(fake.dictionaries.length, 1)
   const { ns, bundles } = fake.dictionaries[0]
-  assert.equal(ns, 'dsh-prompt-sections')
+  assert.equal(ns, 'dsh-system-prompt-insertion')
   const zhKeys = Object.keys(bundles.zh).sort()
   const enKeys = Object.keys(bundles.en).sort()
   assert.deepEqual(zhKeys, enKeys)
@@ -196,7 +196,7 @@ test('the stylesheet paints only with theme tokens', () => {
   assert.doesNotMatch(module.PANEL_CSS, /#[0-9a-f]{3,8}\b/i)
   assert.doesNotMatch(module.PANEL_CSS, /\b(?:rgb|hsl)a?\(/i)
   // The shell's switch geometry, not an invented one.
-  assert.match(module.PANEL_CSS, /\.dps-switch\s*\{[^}]*width: 36px/)
+  assert.match(module.PANEL_CSS, /\.dspi-switch\s*\{[^}]*width: 36px/)
 })
 
 test('the switch reports its state and inverts on click', () => {
@@ -233,7 +233,7 @@ test('a section card keeps placement options inside its select', () => {
     onMove: () => {},
   })
 
-  assert.equal(card.props.className, 'dps-card')
+  assert.equal(card.props.className, 'dspi-card')
   const selects = findAll(card, (node) => node.type === 'select')
   assert.equal(selects.length, 1)
   assert.equal(selects[0].props.value, 'body')
@@ -260,7 +260,7 @@ test('a disabled section is labelled, and an enabled empty one warns', () => {
     ...base,
     section: { id: 's-a', title: 'a', text: '正文', position: 'tail', order: null, enabled: false, interpolate: false },
   })
-  const disabledChip = findAll(disabled, (node) => node.props.className === 'dps-chip')
+  const disabledChip = findAll(disabled, (node) => node.props.className === 'dspi-chip')
   assert.equal(disabledChip.length, 1)
   assert.equal(textOf(disabledChip[0]), '已停用')
 
@@ -268,7 +268,7 @@ test('a disabled section is labelled, and an enabled empty one warns', () => {
     ...base,
     section: { id: 's-b', title: 'b', text: '   ', position: 'head', order: null, enabled: true, interpolate: true },
   })
-  const emptyChip = findAll(empty, (node) => node.props.className === 'dps-chip dps-chip--warn')
+  const emptyChip = findAll(empty, (node) => node.props.className === 'dspi-chip dspi-chip--warn')
   assert.equal(emptyChip.length, 1)
   assert.equal(textOf(emptyChip[0]), '正文为空')
 })
@@ -306,7 +306,7 @@ test('the preview lists the assembly, marks our rows and localizes warnings', ()
     }],
     sections: [
       { name: 'identity', index: 0, bytes: 10, ours: false, text: '' },
-      { name: 'user:prompt-sections:s-a', index: 1, order: 10300, bytes: 5, ours: true, text: '' },
+      { name: 'user:system-prompt-insertion:s-a', index: 1, order: 10300, bytes: 5, ours: true, text: '' },
     ],
   }
   const panel = module.PreviewPanel({
@@ -324,7 +324,7 @@ test('the preview lists the assembly, marks our rows and localizes warnings', ()
   assert.equal(rows.length, 3, 'one header row plus one row per section')
   assert.match(textOf(table[0]), /本插件/)
   assert.match(textOf(table[0]), /10300/)
-  assert.match(textOf(panel), /「回答风格」里有句子与「identity」重复。/)
+  assert.match(textOf(panel), /「回答风格」有一行与「identity」重复。/)
   assert.match(textOf(panel), /预览是已保存的版本/)
 })
 

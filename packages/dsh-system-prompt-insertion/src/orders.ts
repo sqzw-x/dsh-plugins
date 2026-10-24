@@ -15,7 +15,7 @@
  *
  * A section may also carry an explicit `order`, which wins over its band.
  *
- * @module dsh-prompt-sections/orders
+ * @module dsh-system-prompt-insertion/orders
  */
 import type { LayerState, Position, SectionSpec } from './types.ts'
 
@@ -68,7 +68,7 @@ export function resolveSectionOrder(section: SectionSpec, ordinal: number, bases
  *
  * @param state - the stored state.
  * @param bases - the band bases for this load.
- * @param prefix - registered-name prefix (`user:prompt-sections:` by default).
+ * @param prefix - registered-name prefix (`user:system-prompt-insertion:` by default).
  * @returns one plan per ENABLED, non-empty section, in editor order.
  */
 export function planRegistrations(

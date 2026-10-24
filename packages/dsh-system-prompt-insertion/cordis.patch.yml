@@ -1,0 +1,18 @@
+# dsh-system-prompt-insertion profile patch layer.
+#
+# One row mounts both halves. The row id is the profile entry id; the package
+# name is what resolves on disk. The host half registers the stored text as
+# sections of the system prompt, and the Web half draws the sidebar panel.
+#
+# Optional configuration:
+#
+#   - id: system-prompt-insertion
+#     name: dsh-system-prompt-insertion
+#     config:
+#       enabled: true                 # master switch; false registers nothing
+#       storeFile: ''                 # override the JSON store path
+#       maxSectionBytes: 8192         # per-section soft cap reported by the UI
+#
+- insert:
+    - id: system-prompt-insertion
+      name: dsh-system-prompt-insertion

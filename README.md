@@ -9,7 +9,7 @@ DeepSeek Harness（DSH）插件合集，一个 pnpm workspace、一套 CI、一�
 | [`dsh-focus-notify`](packages/dsh-focus-notify) | 会话/回合结束时聚焦提醒与系统通知 | host + Web UI |
 | [`dsh-lan-link`](packages/dsh-lan-link) | 把本机 harness 发布到局域网（带鉴权的启动链接） | host（TypeScript） |
 | [`dsh-notes-context`](packages/dsh-notes-context) | 笔记式上下文压缩：窗口滚动零模型调用，原文可回读 | host |
-| [`dsh-prompt-sections`](packages/dsh-prompt-sections) | 自建系统提示词段落，落点可选开头/中间/末尾，带实时预览 | host + Web UI |
+| [`dsh-system-prompt-insertion`](packages/dsh-system-prompt-insertion) | 把自己的文字注入系统提示词，落点可选开头/中间/末尾，带实时预览 | host + Web UI |
 
 ## 快速开始
 
@@ -22,7 +22,7 @@ pnpm build            # 构建所有带 build 脚本的包
 装到 DSH profile 里（本地开发用 link，改完 `pnpm build` 即生效）：
 
 ```sh
-dsh plugin --profile web add link:$PWD/packages/dsh-prompt-sections
+dsh plugin --profile web add link:$PWD/packages/dsh-system-prompt-insertion
 ```
 
 ## 目录
