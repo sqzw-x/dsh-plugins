@@ -1,0 +1,74 @@
+{
+  "name": "dsh-lan-link",
+  "version": "0.2.1",
+  "description": "Give this harness process LAN access: publish its authenticated launch links to <harness home>/lan-link.txt (and DSH_LAN_LINK), and optionally serve devices directly on a fixed LAN port — the session is held locally, so a device needs no token.",
+  "license": "MIT",
+  "author": "sqzw-x",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sqzw-x/dsh-lan-link.git"
+  },
+  "homepage": "https://github.com/sqzw-x/dsh-lan-link#readme",
+  "bugs": {
+    "url": "https://github.com/sqzw-x/dsh-lan-link/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./gateway": {
+      "default": "./lib/gateway.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "scripts",
+    "docs",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "smoke": "node scripts/live-smoke.mjs"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "lan",
+    "remote",
+    "launch-token",
+    "mobile",
+    "reverse-proxy",
+    "websocket",
+    "局域网",
+    "远程访问",
+    "手机访问",
+    "反向代理"
+  ],
+  "engines": {
+    "node": ">=22.18",
+    "dsh": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.3.0-0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "compatibility": {
+      "dshReleases": {
+        "0.2.0-rc.2": "compatible",
+        "0.2.1-rc.2": "compatible"
+      }
+    }
+  }
+}
