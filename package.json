@@ -18,14 +18,16 @@
     "typecheck": "pnpm -r --filter \"./packages/*\" run typecheck",
     "test": "pnpm -r --filter \"./packages/*\" run test",
     "check": "pnpm -r --filter \"./packages/*\" run check",
-    "verify": "pnpm typecheck && pnpm test",
+    "verify": "pnpm typecheck && pnpm test && pnpm assert:bundles",
     "pack:dry": "pnpm -r --filter \"./packages/*\" exec npm pack --dry-run",
     "changeset": "changeset",
     "version-packages": "changeset version && pnpm install --lockfile-only",
     "release": "pnpm build && changeset publish",
-    "sync-skill": "bash scripts/sync-skill.sh"
+    "sync-skill": "bash scripts/sync-skill.sh",
+    "assert:bundles": "node scripts/assert-bundles.mjs"
   },
   "devDependencies": {
-    "@changesets/cli": "catalog:"
+    "@changesets/cli": "catalog:",
+    "dsh-plugin-toolkit": "workspace:*"
   }
 }

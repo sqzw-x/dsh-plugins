@@ -6,14 +6,16 @@
   "author": "sqzw-x",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sqzw-x/dsh-lan-link.git"
+    "url": "git+https://github.com/sqzw-x/dsh-plugins.git",
+    "directory": "packages/dsh-lan-link"
   },
-  "homepage": "https://github.com/sqzw-x/dsh-lan-link#readme",
+  "homepage": "https://github.com/sqzw-x/dsh-plugins/tree/main/packages/dsh-lan-link#readme",
   "bugs": {
-    "url": "https://github.com/sqzw-x/dsh-lan-link/issues"
+    "url": "https://github.com/sqzw-x/dsh-plugins/issues"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "type": "module",
   "main": "lib/index.js",
@@ -39,7 +41,8 @@
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "smoke": "node scripts/live-smoke.mjs"
+    "smoke": "node scripts/live-smoke.mjs",
+    "verify": "npm run test"
   },
   "keywords": [
     "deepseek-harness",

@@ -42,9 +42,11 @@ const CLIENT_FOOTER = `\t\treturn module.exports;
  * @param {boolean} [options.client] - emit `lib/client.js` (default: true).
  * @param {boolean} [options.dts] - emit host type declarations (default: true).
  * @param {boolean} [options.clean] - wipe `lib/` before the host entry builds (default: true).
+ * @param {Array<object>} [options.extraEntries] - additional host-side entries (for example a
+ *   standalone rules module) merged over the same external/no-bundle defaults.
  * @returns {import('tsdown').UserConfig[]} the tsdown config array.
  */
-export function pluginBuild({ id, client = true, dts = true, clean = true }) {
+export function pluginBuild({ id, client = true, dts = true, clean = true, extraEntries = [] }) {
   if (typeof id !== 'string' || id.trim() === '') throw new Error('pluginBuild: `id` must be the package name')
   const configs = [
     {
@@ -58,6 +60,17 @@ export function pluginBuild({ id, client = true, dts = true, clean = true }) {
       outExtensions: () => ({ js: '.js' }),
     },
   ]
+  for (const extra of extraEntries) {
+    configs.push({
+      outDir: 'lib',
+      format: 'esm',
+      platform: 'neutral',
+      dts: true,
+      deps: { neverBundle: [/^@deepseek-ai\//] },
+      outExtensions: () => ({ js: '.js' }),
+      ...extra,
+    })
+  }
   if (client) {
     configs.push({
       entry: { client: 'src/client.ts' },

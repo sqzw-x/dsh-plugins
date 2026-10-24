@@ -5,14 +5,16 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sqzw-x/dsh-notes-context.git"
+    "url": "git+https://github.com/sqzw-x/dsh-plugins.git",
+    "directory": "packages/dsh-notes-context"
   },
-  "homepage": "https://github.com/sqzw-x/dsh-notes-context#readme",
+  "homepage": "https://github.com/sqzw-x/dsh-plugins/tree/main/packages/dsh-notes-context#readme",
   "bugs": {
-    "url": "https://github.com/sqzw-x/dsh-notes-context/issues"
+    "url": "https://github.com/sqzw-x/dsh-plugins/issues"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "type": "module",
   "main": "lib/index.js",
@@ -56,7 +58,8 @@
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck",
     "test": "npm run build && node --test test/*.test.mjs",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "verify": "npm run typecheck && npm run test"
   },
   "dsh": {
     "bundle": {
@@ -118,18 +121,19 @@
     }
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "~4.0.4",
-    "@deepseek-ai/cosmokit": "^1.8.5",
-    "@deepseek-ai/dsh-agent": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-compaction": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-compaction-basic": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-session": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-token-meter": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
-    "@deepseek-ai/schemastery": "^3.18.4",
-    "@types/node": "^26.6.4",
-    "tsdown": "^0.23.0",
-    "typescript": "^7.0.2"
+    "@deepseek-ai/cordis": "catalog:",
+    "@deepseek-ai/cosmokit": "catalog:",
+    "@deepseek-ai/dsh-agent": "catalog:",
+    "@deepseek-ai/dsh-compaction": "catalog:",
+    "@deepseek-ai/dsh-compaction-basic": "catalog:",
+    "@deepseek-ai/dsh-llm": "catalog:",
+    "@deepseek-ai/dsh-session": "catalog:",
+    "@deepseek-ai/dsh-token-meter": "catalog:",
+    "@deepseek-ai/dsh-tools": "catalog:",
+    "@deepseek-ai/schemastery": "catalog:",
+    "@types/node": "catalog:",
+    "dsh-plugin-toolkit": "workspace:*",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
   }
 }

@@ -52,23 +52,25 @@
     "dsh": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.3.0-0"
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "node scripts/sync-version.mjs && tsdown",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck",
     "test": "npm run build && node --test test/*.test.mjs",
-    "version": "node scripts/sync-version.mjs && git add src/version.ts",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "verify": "npm run typecheck && npm run test"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sqzw-x/dsh-focus-notify.git"
+    "url": "git+https://github.com/sqzw-x/dsh-plugins.git",
+    "directory": "packages/dsh-focus-notify"
   },
-  "homepage": "https://github.com/sqzw-x/dsh-focus-notify#readme",
+  "homepage": "https://github.com/sqzw-x/dsh-plugins/tree/main/packages/dsh-focus-notify#readme",
   "bugs": {
-    "url": "https://github.com/sqzw-x/dsh-focus-notify/issues"
+    "url": "https://github.com/sqzw-x/dsh-plugins/issues"
   },
   "author": "sqzw-x",
   "dsh": {
@@ -98,14 +100,14 @@
     }
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "~4.0.4",
-    "@deepseek-ai/dsh-api-session-controller": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-ui-session": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-ui-workspace": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-session": "0.2.0-rc.2",
-    "@types/node": "^26.6.4",
-    "tsdown": "^0.23.0",
-    "typescript": "^7.0.2",
-    "unrun": "^0.3.1"
+    "@deepseek-ai/cordis": "catalog:",
+    "@deepseek-ai/dsh-api-session-controller": "catalog:",
+    "@deepseek-ai/dsh-client-ui-session": "catalog:",
+    "@deepseek-ai/dsh-client-ui-workspace": "catalog:",
+    "@deepseek-ai/dsh-session": "catalog:",
+    "@types/node": "catalog:",
+    "dsh-plugin-toolkit": "workspace:*",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
   }
 }
