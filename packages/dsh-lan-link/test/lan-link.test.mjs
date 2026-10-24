@@ -66,6 +66,26 @@ async function waitForFile(file, budgetMs = 3000) {
   }
 }
 
+/**
+ * Read a file until it contains `needle`.
+ *
+ * The publisher writes the launch links first and appends the gateway section
+ * only after its loopback self-check finishes, so waiting for the file alone
+ * races the second write on a slow runner. Returns the matching snapshot, or
+ * `undefined` when the budget runs out.
+ */
+async function waitForText(file, needle, budgetMs = 5000) {
+  const until = Date.now() + budgetMs
+  for (;;) {
+    try {
+      const text = await readFile(file, 'utf8')
+      if (text.includes(needle)) return text
+    } catch {}
+    if (Date.now() > until) return undefined
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+}
+
 const workingConnection = { authenticatedUrl: (base) => `${base}/?token=fake-token` }
 
 test('exports the stable plugin name', () => {
@@ -231,8 +251,8 @@ test('gateway: starts on the requested interface, publishes its link first, and 
         gateway: { enabled: true, listenHost: '0.0.0.0', listenPort: 0, allowCidrs: ['127.0.0.0/8'], verifySeam: false }
       })
 
-      const text = await waitForFile(file)
-      assert.ok(text !== undefined, 'the file is written once the gateway is up')
+      const text = await waitForText(file, '# LAN gateway')
+      assert.ok(text !== undefined, 'the gateway section is written once its self-check finishes')
       assert.ok(text.includes('# LAN gateway'), 'the gateway section is labelled')
       assert.match(text, /# gateway status: listening on 0\.0\.0\.0:\d+ -> http:\/\/127\.0\.0\.1:\d+; session minted/, 'the file reports the gateway self-check')
       assert.ok(text.includes('?token=fake-token'), 'the token links are kept alongside it')
