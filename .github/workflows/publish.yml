@@ -1,0 +1,52 @@
+name: Release
+
+# Changesets owns versions, changelogs and npm publication.
+#
+# Flow: merge a PR with a `.changeset/*.md` file → this workflow opens (or
+# updates) a "Version Packages" PR that bumps versions and writes CHANGELOGs →
+# merging that PR makes this workflow publish every bumped package and create one
+# `<package>@<version>` tag per release.
+#
+# Each package must have this repository + this workflow file bound as its npm
+# Trusted Publisher (`npm trust github <pkg> --repo sqzw-x/dsh-plugins --file
+# .github/workflows/publish.yml`); that binding is a manual, one-time step per
+# package and is intentionally not automated here.
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write # npm provenance (OIDC), no long-lived token
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify
+      - uses: changesets/action@v1
+        with:
+          version: pnpm version-packages
+          publish: pnpm release
+          commit: 'chore: version packages'
+          title: 'chore: version packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
