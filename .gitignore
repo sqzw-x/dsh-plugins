@@ -22,3 +22,6 @@ Thumbs.db
 # Editor state
 .idea/
 .vscode/
+
+# Local research scratch (kept outside the public repository)
+research/

@@ -1,5 +1,7 @@
 # DSH plugins
 
+[![CI](https://github.com/sqzw-x/dsh-plugins/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-plugins/actions/workflows/ci.yml)
+
 DeepSeek Harness（DSH）插件合集，一个 pnpm workspace、一套 CI、一套发布流水线，**每个插件仍是独立的 npm 包、独立版本号**。
 
 | 包 | 作用 | 形态 |
@@ -60,7 +62,7 @@ pnpm changeset          # 选择受影响的包与 bump 级别，写一条变更
 
 三个原本独立发布的插件（`dsh-focus-notify`、`dsh-lan-link`、`dsh-notes-context`）通过 `git subtree add` 并入本仓库：**原始提交仍然是祖先**，`git log` 可以看到全部历史；但按路径追溯时，路径归属从导入提交开始（`git log -- <path>` 不会穿透到导入前）。按内容回溯用 `git log -S<字符串> --all` 不受影响。
 
-独立仓库将保留为存档并指向这里；npm 上的包名、版本号与安装命令不变。
+三个独立仓库暂时保持原样、不再更新；以后归档时会在仓库首页指向这里。npm 上的包名、版本号与安装命令不变。
 
 ## 兼容性
 
@@ -68,4 +70,4 @@ pnpm changeset          # 选择受影响的包与 bump 级别，写一条变更
 
 ## 许可
 
-MIT。
+MIT，见 [LICENSE](LICENSE)。

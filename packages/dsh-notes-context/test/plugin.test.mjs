@@ -3,7 +3,7 @@
  * live agent loop: the pure helpers, the notebook registry, and the schema.
  *
  * The end-to-end behaviour (rollover, reminder delivery, provider message
- * ordering) is verified against a real provider in `research/verification-report.md`;
+ * ordering) is verified against a real provider outside this repository;
  * these tests cover the logic those runs cannot exercise cheaply.
  *
  * Run with `npm test`.
