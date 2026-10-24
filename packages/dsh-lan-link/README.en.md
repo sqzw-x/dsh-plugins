@@ -1,6 +1,6 @@
 # dsh-lan-link
 
-[![CI](https://github.com/sqzw-x/dsh-lan-link/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-lan-link/actions/workflows/ci.yml)
+[![CI](https://github.com/sqzw-x/dsh-plugins/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-plugins/actions/workflows/ci.yml)
 
 English | [简体中文](README.md)
 
@@ -99,7 +99,7 @@ Install `dsh-lan-link` from Settings → Plugins, enable it, and restart when pr
 dsh plugin --profile <profile> add dsh-lan-link
 
 # from GitHub
-dsh plugin --profile <profile> add github:sqzw-x/dsh-lan-link
+dsh plugin --profile <profile> add "github:sqzw-x/dsh-plugins#path:packages/dsh-lan-link"
 ```
 
 ### desktop profile (managed by Electron)

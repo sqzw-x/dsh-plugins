@@ -1,6 +1,6 @@
 # dsh-focus-notify
 
-[![CI](https://github.com/sqzw-x/dsh-focus-notify/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-focus-notify/actions/workflows/ci.yml)
+[![CI](https://github.com/sqzw-x/dsh-plugins/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-plugins/actions/workflows/ci.yml)
 
 [English](README.en.md) | 中文
 
@@ -34,7 +34,7 @@ macOS 上窗口被别的应用盖住时，`document.hidden` 仍然是 `false` �
 
 ```sh
 # 从 GitHub 安装
-dsh plugin --profile desktop add github:sqzw-x/dsh-focus-notify
+dsh plugin --profile desktop add "github:sqzw-x/dsh-plugins#path:packages/dsh-focus-notify"
 ```
 
 从本地目录安装（开发时）：

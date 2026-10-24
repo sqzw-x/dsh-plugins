@@ -1,6 +1,6 @@
 # dsh-focus-notify
 
-[![CI](https://github.com/sqzw-x/dsh-focus-notify/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-focus-notify/actions/workflows/ci.yml)
+[![CI](https://github.com/sqzw-x/dsh-plugins/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-plugins/actions/workflows/ci.yml)
 
 English | [中文](README.md)
 
@@ -25,7 +25,7 @@ On macOS, `document.hidden` stays `false` while the window is merely covered by 
 ## Install
 
 ```sh
-dsh plugin --profile desktop add github:sqzw-x/dsh-focus-notify
+dsh plugin --profile desktop add "github:sqzw-x/dsh-plugins#path:packages/dsh-focus-notify"
 ```
 
 From a local directory (development):

@@ -69,7 +69,7 @@ context_history { from: 0, to: 50, raw: true }  → raw text
 ## Configuration
 
 The commonly used keys are below. All fields are on the settings page; derivations are in
-[Internals](https://github.com/sqzw-x/dsh-notes-context/blob/main/docs/INTERNALS.md).
+[Internals](https://github.com/sqzw-x/dsh-plugins/blob/main/packages/dsh-notes-context/docs/INTERNALS.md).
 
 | Key | Default | Description |
 |---|---|---|
@@ -117,7 +117,7 @@ package's build script (`prepack` produces `lib/`). Add the `allowBuilds` entry
 pnpm prints to the profile's `pnpm-workspace.yaml`, then retry:
 
 ```sh
-dsh plugin --profile <profile> add github:sqzw-x/dsh-notes-context
+dsh plugin --profile <profile> add "github:sqzw-x/dsh-plugins#path:packages/dsh-notes-context"
 ```
 
 The bundle contains two patch rows: it disables `compaction-basic` and mounts this package.
@@ -131,7 +131,7 @@ The bundle contains two patch rows: it disables `compaction-basic` and mounts th
 - **A free boundary is not a free feature.** Writing the notebook is a tool call; the cost
   moves earlier rather than away.
 - **DSH's own compaction settings are neither visible nor changeable here** — they live in
-  the config file and need a dsh restart (why: [Internals](https://github.com/sqzw-x/dsh-notes-context/blob/main/docs/INTERNALS.md)).
+  the config file and need a dsh restart (why: [Internals](https://github.com/sqzw-x/dsh-plugins/blob/main/packages/dsh-notes-context/docs/INTERNALS.md)).
 - Sessions with a restricted toolset (subagents) that cannot call `context_notes` degrade to
   a notebook-less rollover.
 

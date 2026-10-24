@@ -1,6 +1,6 @@
 # dsh-lan-link
 
-[![CI](https://github.com/sqzw-x/dsh-lan-link/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-lan-link/actions/workflows/ci.yml)
+[![CI](https://github.com/sqzw-x/dsh-plugins/actions/workflows/ci.yml/badge.svg)](https://github.com/sqzw-x/dsh-plugins/actions/workflows/ci.yml)
 
 [English](README.en.md) | 简体中文
 
@@ -99,7 +99,7 @@ http://192.168.0.2:19387/?token=…
 dsh plugin --profile <profile> add dsh-lan-link
 
 # 从 GitHub
-dsh plugin --profile <profile> add github:sqzw-x/dsh-lan-link
+dsh plugin --profile <profile> add "github:sqzw-x/dsh-plugins#path:packages/dsh-lan-link"
 ```
 
 ### desktop profile（Electron 独占）

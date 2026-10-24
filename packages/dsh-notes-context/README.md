@@ -60,7 +60,7 @@ context_history { from: 0, to: 50, raw: true }  → 原文
 
 ## 配置
 
-常用配置项如下。完整字段见设置页，推导过程见 [内部机制](https://github.com/sqzw-x/dsh-notes-context/blob/main/docs/INTERNALS.md)。
+常用配置项如下。完整字段见设置页，推导过程见 [内部机制](https://github.com/sqzw-x/dsh-plugins/blob/main/packages/dsh-notes-context/docs/INTERNALS.md)。
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
@@ -99,7 +99,7 @@ dsh --profile <profile> --dump-config   # 确认两层都生效
 从 GitHub 源码安装也可以，但 pnpm 会要求允许本包运行构建脚本（`prepack` 生成 `lib/`）；把 pnpm 提示的 `allowBuilds` 条目写进 profile 的 `pnpm-workspace.yaml` 后重试：
 
 ```sh
-dsh plugin --profile <profile> add github:sqzw-x/dsh-notes-context
+dsh plugin --profile <profile> add "github:sqzw-x/dsh-plugins#path:packages/dsh-notes-context"
 ```
 
 组合包含两行 patch：停用 `compaction-basic`，挂载本包。
@@ -109,7 +109,7 @@ dsh plugin --profile <profile> add github:sqzw-x/dsh-notes-context
 - **笔记本质量由模型决定。** 插件不自动补写、不代为总结。模型未记录的信息需从原文回读。
 - **每次写入都是一条留在上下文里的消息。** 频繁重写会增大上下文。
 - **边界零开销 ≠ 全程零开销。** 写笔记本本身是一次工具调用，成本前移而非消除。
-- **DSH 自身的压缩配置不可见、不可改**，只能改配置文件并重启 dsh（原因见 [内部机制](https://github.com/sqzw-x/dsh-notes-context/blob/main/docs/INTERNALS.md)）。
+- **DSH 自身的压缩配置不可见、不可改**，只能改配置文件并重启 dsh（原因见 [内部机制](https://github.com/sqzw-x/dsh-plugins/blob/main/packages/dsh-notes-context/docs/INTERNALS.md)）。
 - 受限工具集的会话（如子代理）若无法调用 `context_notes`，退化为无笔记本的滚动。
 
 ## 开发
