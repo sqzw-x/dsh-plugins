@@ -269,7 +269,20 @@ importers:
         specifier: 'catalog:'
         version: 7.0.2
 
-  packages/dsh-lan-link: {}
+  packages/dsh-lan-link:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.5
+      dsh-plugin-toolkit:
+        specifier: workspace:*
+        version: link:../../tooling/dsh-plugin-toolkit
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.23.1(typescript@7.0.2)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
 
   packages/dsh-notes-context:
     devDependencies:

@@ -23,7 +23,7 @@
  * app itself needs it there. Enabling `gateway` adds a second listener on this
  * machine's network address that terminates device connections and re-issues
  * them over loopback as the host's own browser would — including the host's
- * session cookie, so a device needs no token at all. `lib/gateway.js` documents
+ * session cookie, so a device needs no token at all. `src/gateway.ts` documents
  * that trade in full; read it before turning the option on, because everything
  * that reaches that port is treated as this machine's user.
  *
@@ -40,6 +40,7 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { homedir, networkInterfaces } from 'node:os'
 import { dirname, isAbsolute, join } from 'node:path'
 import { startLanGateway } from './gateway.js'
+import type { LanGatewayHandle } from './gateway.js'
 
 /** Stable Cordis plugin name. */
 export const name = 'lan-link'
@@ -70,12 +71,104 @@ const HEADER = [
   ''
 ].join('\n')
 
+/** The services this plugin reads lazily from the host context. */
+export interface LanLinkContext {
+  /** Cordis logger; every call is best-effort. */
+  logger?: {
+    info?(message: string): void
+    warn?(message: string): void
+  }
+  /** Look up an optional service; absent services simply mean "not yet". */
+  get?(name: string): unknown
+  /** Register a disposer owned by this plugin. */
+  effect?(register: () => () => void, label?: string): unknown
+}
+
+/** One shell-environment variable group. */
+interface ShellEnvRegistration {
+  name: string
+  variables: Record<string, { description: string }>
+  resolve(): Record<string, string>
+}
+
+/** The slice of the shell environment service this plugin uses. */
+interface ShellEnvService {
+  register(entry: ShellEnvRegistration): void
+}
+
+/** The slice of the web server service this plugin uses. */
+interface WebServerService {
+  port?: unknown
+}
+
+/** The slice of the connection service this plugin uses. */
+interface ConnectionService {
+  authenticatedUrl(base: string): string
+}
+
+/** Public shape of the `gateway` config block. */
+export interface LanLinkGatewayOptions {
+  /** Turn the LAN gateway on; absent or false keeps publisher-only behaviour. */
+  enabled?: boolean
+  /** Interface to bind; `0.0.0.0` means every interface. */
+  listenHost?: string
+  /** Port to bind; `0` asks the OS for a free one. */
+  listenPort?: number
+  /** Client ranges admitted besides loopback. */
+  allowCidrs?: string[]
+  /** Whether this machine's own loopback clients are admitted. */
+  allowLoopback?: boolean
+  /** Basic Auth user; active only together with a password. */
+  username?: string
+  /** Basic Auth password; active only together with a user. */
+  password?: string
+  /** Inject the host-claim flag into served documents (default true). */
+  injectHostClaim?: boolean
+  /** Probe the served client bundle for the host-claim seam (default true). */
+  verifySeam?: boolean
+}
+
+/** Public shape of the plugin row configuration. */
+export interface LanLinkConfig {
+  /** Target file name, absolute or relative to the harness home. */
+  fileName?: string
+  /** How often to re-check the bound port and addresses, in ms. */
+  intervalMs?: number
+  /** Optional LAN-facing reverse gateway. */
+  gateway?: LanLinkGatewayOptions
+}
+
+/** One LAN address and the interface that carries it. */
+interface LanCandidate {
+  address: string
+  iface: string
+}
+
+/** Normalized gateway options. */
+interface GatewayConfig {
+  listenHost: string
+  listenPort: number
+  allowCidrs: string[]
+  allowLoopback: boolean
+  username: string
+  password: string
+  injectHostClaim: boolean
+  verifySeam: boolean
+}
+
+/** Normalized plugin options. */
+interface ResolvedConfig {
+  fileName: string
+  intervalMs: number
+  gateway: GatewayConfig | undefined
+}
+
 /**
  * Resolve the harness home the way the rest of the harness does, so a
  * `DSH_HOME` override lands the file beside the profile that produced it.
  * @returns absolute harness home directory.
  */
-function harnessHome() {
+function harnessHome(): string {
   const configured = process.env.DSH_HOME
   return configured !== undefined && configured !== '' ? configured : join(homedir(), '.dsh')
 }
@@ -85,8 +178,8 @@ function harnessHome() {
  * carries it, so the reader can tell Wi-Fi from a VPN or a proxy tunnel.
  * @returns entries sorted by address, one per address.
  */
-function lanCandidates() {
-  const byAddress = new Map()
+function lanCandidates(): LanCandidate[] {
+  const byAddress = new Map<string, string>()
   for (const [iface, entries] of Object.entries(networkInterfaces())) {
     for (const entry of entries ?? []) {
       if (entry.family !== 'IPv4' || entry.internal !== false) continue
@@ -104,30 +197,47 @@ function lanCandidates() {
  * @param raw - the `gateway` config object, if any.
  * @returns normalized gateway options, or undefined when disabled.
  */
-function readGatewayConfig(raw) {
-  if (raw === null || typeof raw !== 'object' || raw.enabled !== true) return undefined
+function readGatewayConfig(raw: unknown): GatewayConfig | undefined {
+  if (raw === null || typeof raw !== 'object' || (raw as { enabled?: unknown }).enabled !== true) return undefined
+  const source = raw as Record<string, unknown>
   // 0 is meaningful here: the OS picks a free port (tests, or a deployment
   // that publishes the bound port rather than fixing one).
-  const listenPort = Number.isSafeInteger(raw.listenPort) && raw.listenPort >= 0 && raw.listenPort <= 65535
-    ? raw.listenPort
+  const listenPort = typeof source.listenPort === 'number' &&
+    Number.isSafeInteger(source.listenPort) &&
+    source.listenPort >= 0 &&
+    source.listenPort <= 65535
+    ? source.listenPort
     : DEFAULT_GATEWAY_PORT
   return {
-    listenHost: typeof raw.listenHost === 'string' && raw.listenHost !== '' ? raw.listenHost : '0.0.0.0',
+    listenHost: typeof source.listenHost === 'string' && source.listenHost !== '' ? source.listenHost : '0.0.0.0',
     listenPort,
-    allowCidrs: Array.isArray(raw.allowCidrs) ? raw.allowCidrs.filter((entry) => typeof entry === 'string') : [],
-    allowLoopback: raw.allowLoopback !== false,
-    username: typeof raw.username === 'string' ? raw.username : '',
-    password: typeof raw.password === 'string' ? raw.password : '',
-    injectHostClaim: raw.injectHostClaim !== false,
-    verifySeam: raw.verifySeam !== false
+    allowCidrs: Array.isArray(source.allowCidrs)
+      ? source.allowCidrs.filter((entry): entry is string => typeof entry === 'string')
+      : [],
+    allowLoopback: source.allowLoopback !== false,
+    username: typeof source.username === 'string' ? source.username : '',
+    password: typeof source.password === 'string' ? source.password : '',
+    injectHostClaim: source.injectHostClaim !== false,
+    verifySeam: source.verifySeam !== false
   }
 }
 
-function readConfig(config) {
-  const rawName = typeof config?.fileName === 'string' && config.fileName !== '' ? config.fileName : DEFAULT_FILE_NAME
+/**
+ * Validate the row config without trusting its types: a profile can pass
+ * anything, and a malformed `gateway` block must not take the entry down.
+ * @param config - raw row config.
+ * @returns normalized options.
+ */
+function readConfig(config: unknown): ResolvedConfig {
+  const source = config !== null && typeof config === 'object' ? config as Record<string, unknown> : {}
+  const rawName = typeof source.fileName === 'string' && source.fileName !== '' ? source.fileName : DEFAULT_FILE_NAME
   const fileName = isAbsolute(rawName) ? rawName : join(harnessHome(), rawName)
-  const intervalMs = Number.isSafeInteger(config?.intervalMs) && config.intervalMs > 0 ? config.intervalMs : DEFAULT_INTERVAL_MS
-  return { fileName, intervalMs, gateway: readGatewayConfig(config?.gateway) }
+  const intervalMs = typeof source.intervalMs === 'number' &&
+    Number.isSafeInteger(source.intervalMs) &&
+    source.intervalMs > 0
+    ? source.intervalMs
+    : DEFAULT_INTERVAL_MS
+  return { fileName, intervalMs, gateway: readGatewayConfig(source.gateway) }
 }
 
 /**
@@ -138,24 +248,24 @@ function readConfig(config) {
  * @param ctx - plugin context.
  * @param config - optional `{ fileName, intervalMs, gateway }`.
  */
-export function apply(ctx, config) {
+export function apply(ctx: LanLinkContext, config?: LanLinkConfig): void {
   const { fileName, intervalMs, gateway: gatewayConfig } = readConfig(config)
   const directory = dirname(fileName)
-  let lastKey
+  let lastKey: string | undefined
   let shellRegistered = false
   let lastLanUrl = ''
 
-  let gateway
-  let gatewayBoundPort
-  let gatewayUpstreamPort
+  let gateway: LanGatewayHandle | undefined
+  let gatewayBoundPort: number | undefined
+  let gatewayUpstreamPort: number | undefined
   let gatewayStarting = false
   let gatewayFailedAt = 0
   // Status lines are published into the file: on the packaged Desktop app the
   // plugin's log output goes to a stdout nobody reads, so the file is the only
   // place a human can see whether the gateway and its self-checks are healthy.
-  let gatewayStatus = []
+  let gatewayStatus: string[] = []
 
-  const warn = (message) => {
+  const warn = (message: string): void => {
     try {
       if (ctx.logger?.warn !== undefined) ctx.logger.warn(message)
       else console.error(message)
@@ -163,7 +273,7 @@ export function apply(ctx, config) {
       /* a plugin must never fail because logging failed */
     }
   }
-  const note = (message) => {
+  const note = (message: string): void => {
     try {
       if (ctx.logger?.info !== undefined) ctx.logger.info(message)
     } catch {
@@ -172,10 +282,10 @@ export function apply(ctx, config) {
   }
 
   /** Register `DSH_LAN_LINK` once, after the first link is known. */
-  const registerShellVariable = () => {
+  const registerShellVariable = (): void => {
     if (shellRegistered) return
     try {
-      const shellEnv = ctx.get?.('shellEnv')
+      const shellEnv = ctx.get?.('shellEnv') as ShellEnvService | undefined
       if (shellEnv?.register === undefined) return
       shellEnv.register({
         name: 'lan-link',
@@ -198,7 +308,8 @@ export function apply(ctx, config) {
    * @param boundPort - the port the gateway actually bound.
    * @returns URLs, best first.
    */
-  const gatewayUrls = (boundPort) => {
+  const gatewayUrls = (boundPort: number): string[] => {
+    if (gatewayConfig === undefined) return []
     const addresses = gatewayConfig.listenHost === '0.0.0.0' || gatewayConfig.listenHost === '::'
       ? ['127.0.0.1', ...lanCandidates().map(({ address }) => address)]
       : [gatewayConfig.listenHost]
@@ -212,7 +323,7 @@ export function apply(ctx, config) {
    * @param connection - the Connection service (session-cookie source).
    * @param upstreamPort - the harness web server port.
    */
-  const ensureGateway = async (connection, upstreamPort) => {
+  const ensureGateway = async (connection: ConnectionService, upstreamPort: number): Promise<void> => {
     if (gatewayConfig === undefined) return
     if (gateway !== undefined && gatewayUpstreamPort === upstreamPort) return
     if (gatewayStarting) return
@@ -280,10 +391,10 @@ export function apply(ctx, config) {
     }
   }
 
-  const tick = async () => {
+  const tick = async (): Promise<void> => {
     try {
-      const webServer = ctx.get?.('webServer')
-      const connection = ctx.get?.('connection')
+      const webServer = ctx.get?.('webServer') as WebServerService | undefined
+      const connection = ctx.get?.('connection') as ConnectionService | undefined
       if (webServer === undefined || connection === undefined) return
       const port = Number(webServer.port)
       if (!Number.isSafeInteger(port) || port <= 0) return
@@ -291,7 +402,7 @@ export function apply(ctx, config) {
 
       if (gatewayConfig !== undefined) await ensureGateway(connection, port)
 
-      const linkFor = (address) => {
+      const linkFor = (address: string): string | undefined => {
         try {
           return connection.authenticatedUrl(`http://${address}:${String(port)}`)
         } catch {
@@ -301,7 +412,7 @@ export function apply(ctx, config) {
 
       const loopback = linkFor('127.0.0.1')
       if (loopback === undefined) return
-      const lan = []
+      const lan: Array<{ iface: string; url: string }> = []
       for (const { address, iface } of lanCandidates()) {
         const url = linkFor(address)
         if (url !== undefined) lan.push({ iface, url })

@@ -9,7 +9,7 @@
 | 路径 | 内容 |
 |---|---|
 | `packages/dsh-focus-notify` | 回合结束聚焦提醒 / 系统通知（host + Web UI） |
-| `packages/dsh-lan-link` | 局域网访问（纯 JS，`lib/` 手写并入库） |
+| `packages/dsh-lan-link` | 局域网访问（host，TypeScript） |
 | `packages/dsh-notes-context` | 笔记式上下文压缩（host） |
 | `packages/dsh-prompt-sections` | 系统提示词段落编辑器（host + Web UI） |
 | `tooling/dsh-plugin-toolkit` | 构建预设 `pluginBuild()`、测试替身、产物契约 |
@@ -30,7 +30,7 @@ pnpm build                               # 构建全部（TS 包）
 
 1. **不手改版本号。** 版本与 CHANGELOG 由 changesets 生成；改功能/修复就加一条 changeset：
    `pnpm changeset`（非交互环境可手写 `.changeset/<slug>.md`，frontmatter 里写包名与 bump 级别）。
-2. **不提交 TS 包的 `lib/`。** 它由 `pnpm build` 生成、`prepack` 保证发布时存在。`dsh-lan-link` 例外：它的 `lib/` 是手写源码，必须入库。
+2. **不提交 TS 包的 `lib/`。** 它由 `pnpm build` 生成、`prepack` 保证发布时存在。
 3. **依赖版本写 `catalog:`。** 新依赖先在 `pnpm-workspace.yaml` 的 `catalog` 里登记一次，再在包里引用；禁止在包里写死已有依赖的版本。
 4. **`@deepseek-ai/*` 一律是 peer。** 宿主提供它们；不要把它们放进 `dependencies`，也不要打进产物。
 5. **Web UI 的客户端半区只 `require('react')`。** 不 require 任何 `@deepseek-ai/dsh-client-*` 包（内部 API 会变，且会连带前端失败）。样式用 `--dsw-alias-*` token。

@@ -1,7 +1,7 @@
 # LAN 网关设计记录 — `dsh-lan-link` gateway
 
 **日期：** 2026-10-18, 01:30–02:20 (+08:00)
-**范围：** `packages/dsh-lan-link` v0.2.0（新增 `lib/gateway.js` + `scripts/live-smoke.mjs`）
+**范围：** `packages/dsh-lan-link` v0.2.0（新增 gateway 模块 + `scripts/live-smoke.mjs`；源码现为 `src/gateway.ts`）
 **被测 harness：** 桌面版 app 内置的 0.2.1-rc.2（`/Applications/DeepSeek Harness.app/…/app.asar/dsh`），进程 PID 90453，harness 端口 50908
 **对照对象：** 第三方插件 `@smanx/dsh-proxy`（master@cda3f24，package.json 0.1.2）
 

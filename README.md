@@ -7,7 +7,7 @@ DeepSeek Harness（DSH）插件合集，一个 pnpm workspace、一套 CI、一�
 | 包 | 作用 | 形态 |
 |---|---|---|
 | [`dsh-focus-notify`](packages/dsh-focus-notify) | 会话/回合结束时聚焦提醒与系统通知 | host + Web UI |
-| [`dsh-lan-link`](packages/dsh-lan-link) | 把本机 harness 发布到局域网（带鉴权的启动链接） | host（纯 JS，无构建） |
+| [`dsh-lan-link`](packages/dsh-lan-link) | 把本机 harness 发布到局域网（带鉴权的启动链接） | host（TypeScript） |
 | [`dsh-notes-context`](packages/dsh-notes-context) | 笔记式上下文压缩：窗口滚动零模型调用，原文可回读 | host |
 | [`dsh-prompt-sections`](packages/dsh-prompt-sections) | 自建系统提示词段落，落点可选开头/中间/末尾，带实时预览 | host + Web UI |
 

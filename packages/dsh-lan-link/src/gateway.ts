@@ -42,8 +42,88 @@
  * @module dsh-lan-link/gateway
  */
 import http from 'node:http'
+import type { IncomingHttpHeaders, IncomingMessage, OutgoingHttpHeaders, ServerResponse } from 'node:http'
 import net from 'node:net'
+import type { AddressInfo, Socket } from 'node:net'
 import zlib from 'node:zlib'
+
+/** Log levels the gateway emits to its caller. */
+export type GatewayLogLevel = 'info' | 'warn'
+
+/** Sink for the gateway's human-readable diagnostics. */
+export type GatewayLog = (level: GatewayLogLevel, message: string) => void
+
+/** One parsed allow-list entry. IPv4 entries carry their integer value and mask. */
+export interface CidrRange {
+  /** Address family; only IPv4 ranges are matched. */
+  family: 4 | 6
+  /** Whether the range denotes this machine's own loopback. */
+  loopback: boolean
+  /** Prefix length in bits. */
+  bits: number
+  /** IPv4 address as an unsigned integer. */
+  value?: number
+  /** IPv4 network mask as an unsigned integer. */
+  mask?: number
+}
+
+/** The result of parsing a configured allow list. */
+export interface ParsedCidrs {
+  /** Usable ranges. */
+  ranges: CidrRange[]
+  /** Entries that could not be parsed, kept for a warning. */
+  rejected: string[]
+}
+
+/** What `probeHostClaimSeam` reports back to the plugin log. */
+export interface HostClaimProbe {
+  /** Whether the served client bundle still reads the host-claim flag. */
+  ok: boolean
+  /** Human-readable explanation either way. */
+  reason: string
+}
+
+/** Options for {@link startLanGateway}. */
+export interface LanGatewayOptions {
+  /** Interface to bind; `0.0.0.0` means every interface. */
+  listenHost?: string
+  /** Port to bind; `0` asks the OS for a free one. */
+  listenPort?: number
+  /** Loopback address of the harness web server. */
+  upstreamHost?: string
+  /** Port the harness web server bound. */
+  upstreamPort: number
+  /** Returns a tokenized loopback URL used to mint the host session cookie. */
+  credentialUrl?: () => string
+  /** Client ranges admitted besides loopback. */
+  allowCidrs?: string[]
+  /** Whether this machine's own loopback clients are admitted. */
+  allowLoopback?: boolean
+  /** Basic Auth user; active only together with a password. */
+  username?: string
+  /** Basic Auth password; active only together with a user. */
+  password?: string
+  /** Inject the host-claim flag into served documents (default true). */
+  injectHostClaim?: boolean
+  /** Diagnostics sink. */
+  log?: GatewayLog
+}
+
+/** The handle returned by {@link startLanGateway}. */
+export interface LanGatewayHandle {
+  /** Resolves once the listener is bound. */
+  ready: Promise<{ port: number }>
+  /** Stop the listener and every tunnelled socket. */
+  close(): Promise<void>
+  /** Mint (or re-mint) the host browser-session cookie over loopback. */
+  refreshCookie(): Promise<boolean>
+  /** Confirm the served client bundle still reads the host-claim flag. */
+  probeHostClaimSeam(): Promise<HostClaimProbe>
+  /** The port currently bound, or the configured port before/after binding. */
+  readonly boundPort: number
+  /** Human-readable HTTP URLs for the given addresses, in input order. */
+  describeUrls(boundPort: number, addresses: string[]): string[]
+}
 
 /** `crypto.randomUUID` shim for non-secure contexts, built on getRandomValues. */
 export const RANDOM_UUID_POLYFILL =
@@ -92,7 +172,7 @@ const UPGRADE_DROP = new Set(['proxy-authenticate', 'proxy-authorization', 'te',
  * @param scripts - script tags to inject, in order.
  * @returns the document to serve.
  */
-export function injectHeadScripts(html, scripts) {
+export function injectHeadScripts(html: string, scripts: string[]): string {
   const pending = scripts.filter((script) => script !== '' && !html.includes(script))
   if (pending.length === 0) return html
   const payload = pending.join('')
@@ -111,10 +191,10 @@ export function injectHeadScripts(html, scripts) {
  * @param entry - the configured text.
  * @returns the parsed range, or undefined when the entry is unusable.
  */
-export function parseCidrEntry(entry) {
+export function parseCidrEntry(entry: unknown): CidrRange | undefined {
   const text = String(entry ?? '').trim()
   if (text === '') return undefined
-  const [address, bitsText] = text.split('/')
+  const [address = '', bitsText] = text.split('/')
   if (address === '::1') return { family: 6, loopback: true, bits: 128 }
   const octets = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(address)
   if (octets === null) return undefined
@@ -131,10 +211,11 @@ export function parseCidrEntry(entry) {
  * @param entries - configured entries (strings).
  * @returns `{ ranges, rejected }` — rejected entries are reported, never fatal.
  */
-export function parseCidrs(entries) {
-  const ranges = []
-  const rejected = []
-  for (const entry of Array.isArray(entries) ? entries : []) {
+export function parseCidrs(entries: unknown): ParsedCidrs {
+  const ranges: CidrRange[] = []
+  const rejected: string[] = []
+  const list: unknown[] = Array.isArray(entries) ? entries : []
+  for (const entry of list) {
     const parsed = parseCidrEntry(entry)
     if (parsed === undefined) rejected.push(String(entry))
     else ranges.push(parsed)
@@ -143,7 +224,7 @@ export function parseCidrs(entries) {
 }
 
 /** Normalize one socket address, unwrapping IPv4-mapped IPv6 (`::ffff:1.2.3.4`). */
-function normalizeAddress(address) {
+function normalizeAddress(address: unknown): string | undefined {
   if (typeof address !== 'string' || address === '') return undefined
   const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(address)
   return (mapped?.[1] ?? address).replace(/^\[|\]$/g, '')
@@ -156,7 +237,7 @@ function normalizeAddress(address) {
  * @param allowLoopback - whether this machine's own loopback clients are allowed.
  * @returns true when the client is admitted.
  */
-export function isAddressAllowed(address, ranges, allowLoopback = true) {
+export function isAddressAllowed(address: unknown, ranges: CidrRange[], allowLoopback = true): boolean {
   const normalized = normalizeAddress(address)
   if (normalized === undefined) return false
   if (normalized === '::1' || normalized.startsWith('127.')) return allowLoopback
@@ -165,11 +246,17 @@ export function isAddressAllowed(address, ranges, allowLoopback = true) {
   const parts = octets.slice(1).map(Number)
   if (parts.some((part) => part > 255)) return false
   const value = parts.reduce((acc, part) => acc * 256 + part, 0)
-  return ranges.some((range) => range.family === 4 && ((value & range.mask) >>> 0) === ((range.value & range.mask) >>> 0))
+  return ranges.some(
+    (range) =>
+      range.family === 4 &&
+      range.value !== undefined &&
+      range.mask !== undefined &&
+      ((value & range.mask) >>> 0) === ((range.value & range.mask) >>> 0)
+  )
 }
 
 /** Constant-time string compare that tolerates differing lengths. */
-function safeEqual(left, right) {
+function safeEqual(left: unknown, right: unknown): boolean {
   const a = Buffer.from(String(left))
   const b = Buffer.from(String(right))
   if (a.length !== b.length) return false
@@ -177,10 +264,10 @@ function safeEqual(left, right) {
 }
 
 /** Whether an incoming `Authorization` header matches the configured Basic pair. */
-export function checkBasicAuth(header, username, password) {
+export function checkBasicAuth(header: unknown, username: string, password: string): boolean {
   const match = /^Basic\s+(.+)$/i.exec(String(header ?? ''))
   if (match === null) return false
-  const decoded = Buffer.from(match[1], 'base64').toString('utf8')
+  const decoded = Buffer.from(match[1] ?? '', 'base64').toString('utf8')
   const separator = decoded.indexOf(':')
   if (separator === -1) return false
   // Both halves are always compared: no early return that leaks which field missed.
@@ -190,8 +277,8 @@ export function checkBasicAuth(header, username, password) {
 }
 
 /** Decompress one response body when the rewrite has to see plain text. */
-function decompressBody(buffer, encoding) {
-  const first = String(encoding ?? '').split(',')[0].trim().toLowerCase()
+function decompressBody(buffer: Buffer, encoding: unknown): { body: Buffer; encoding: string } | undefined {
+  const first = String(encoding ?? '').split(',')[0]?.trim().toLowerCase() ?? ''
   try {
     if (first === '' || first === 'identity') return { body: buffer, encoding: '' }
     if (first === 'gzip') return { body: zlib.gunzipSync(buffer), encoding: 'gzip' }
@@ -215,7 +302,7 @@ function decompressBody(buffer, encoding) {
  * @param request - incoming request.
  * @returns true for document navigations.
  */
-function wantsDocument(request) {
+function wantsDocument(request: IncomingMessage): boolean {
   const accept = String(request.headers.accept ?? '')
   return accept.includes('text/html') || accept.includes('application/xhtml+xml')
 }
@@ -223,18 +310,18 @@ function wantsDocument(request) {
 /**
  * Response headers that must survive to the client (everything else is copied).
  * @param upstreamHeaders - the upstream response headers.
- * @param dropLength - drop `content-length` (a rewritten body changes length).
+ * @param options - `dropLength` drops `content-length` (a rewritten body changes length).
  * @returns headers safe to write downstream.
  */
-function responseHeaders(upstreamHeaders, { dropLength }) {
-  const headers = {}
+function responseHeaders(upstreamHeaders: IncomingHttpHeaders, { dropLength }: { dropLength: boolean }): OutgoingHttpHeaders {
+  const headers: OutgoingHttpHeaders = {}
   for (const [key, value] of Object.entries(upstreamHeaders)) {
     const name = key.toLowerCase()
     if (HOP_BY_HOP.has(name)) continue
     // The harness mints its session for *its own* authority; leaking that cookie
     // to a LAN browser would only create a stale credential on the device.
     if (name === 'set-cookie') {
-      const kept = (Array.isArray(value) ? value : [value]).filter(
+      const kept = (Array.isArray(value) ? value : value === undefined ? [] : [value]).filter(
         (cookie) => !String(cookie).toLowerCase().startsWith(HARNESS_COOKIE_PREFIX)
       )
       if (kept.length > 0) headers['set-cookie'] = kept
@@ -250,23 +337,9 @@ function responseHeaders(upstreamHeaders, { dropLength }) {
  * Start the LAN gateway.
  *
  * @param options - gateway options.
- * @param options.listenHost - interface to bind (`0.0.0.0` for every interface).
- * @param options.listenPort - port to bind; 0 asks the OS for a free one.
- * @param options.upstreamHost - loopback address of the harness web server.
- * @param options.upstreamPort - port the harness web server bound.
- * @param options.credentialUrl - returns a tokenized loopback URL; the gateway
- *   fetches it once to mint the browser-session cookie it presents upstream.
- * @param options.allowCidrs - client ranges admitted besides loopback.
- * @param options.allowLoopback - whether this machine's own clients are admitted.
- * @param options.username - Basic Auth user; active only with a password.
- * @param options.password - Basic Auth password; active only with a user.
- * @param options.injectHostClaim - inject the host-claim flag (default true).
- * @param options.verifySeam - probe the served client bundle for the host-claim
- *   seam once after start, and warn when the harness no longer honours it.
- * @param options.log - `(level, message)` sink.
  * @returns a handle: `{ ready, close, boundPort, refreshCookie, probeHostClaimSeam }`.
  */
-export function startLanGateway(options) {
+export function startLanGateway(options: LanGatewayOptions): LanGatewayHandle {
   const {
     listenHost = '0.0.0.0',
     listenPort = 3081,
@@ -293,27 +366,28 @@ export function startLanGateway(options) {
 
   let cookie = ''
   let closed = false
-  const upgradedSockets = new Set()
+  const upgradedSockets = new Set<Socket>()
 
   /** Mint (or re-mint) the host browser-session cookie over loopback. */
-  const refreshCookie = async () => {
+  const refreshCookie = async (): Promise<boolean> => {
     if (typeof credentialUrl !== 'function') return false
     const url = credentialUrl()
     if (typeof url !== 'string' || url === '') return false
     const response = await fetch(url, { redirect: 'manual' })
-    const [setCookie] = response.headers.getSetCookie?.() ?? []
+    const headerBag = response.headers as Headers & { getSetCookie?: () => string[] }
+    const [setCookie] = headerBag.getSetCookie?.() ?? []
     if (setCookie === undefined) {
       log('warn', `lan-link gateway: could not mint the host session cookie (HTTP ${String(response.status)})`)
       return false
     }
-    cookie = setCookie.split(';')[0]
+    cookie = setCookie.split(';')[0] ?? ''
     return true
   }
 
   /** One upstream request, with the host identity applied. */
-  const forward = (request, { identity, cookieValue }) =>
+  const forward = (request: IncomingMessage, { identity, cookieValue }: { identity: boolean; cookieValue: string }): Promise<IncomingMessage> =>
     new Promise((resolve, reject) => {
-      const headers = {}
+      const headers: OutgoingHttpHeaders = {}
       for (const [key, value] of Object.entries(request.headers)) {
         if (HOP_BY_HOP.has(key.toLowerCase())) continue
         headers[key] = value
@@ -332,15 +406,15 @@ export function startLanGateway(options) {
     })
 
   /** Stream one upstream response to the client untouched. */
-  const pipeThrough = (upstreamResponse, response) => {
+  const pipeThrough = (upstreamResponse: IncomingMessage, response: ServerResponse): void => {
     response.writeHead(upstreamResponse.statusCode ?? 502, responseHeaders(upstreamResponse.headers, { dropLength: false }))
     upstreamResponse.pipe(response)
   }
 
   /** Serve one upstream response, rewriting the document when it is HTML. */
-  const pipeDocument = (upstreamResponse, response, scripts) => {
-    const chunks = []
-    upstreamResponse.on('data', (chunk) => chunks.push(chunk))
+  const pipeDocument = (upstreamResponse: IncomingMessage, response: ServerResponse, scripts: string[]): void => {
+    const chunks: Buffer[] = []
+    upstreamResponse.on('data', (chunk: Buffer) => chunks.push(chunk))
     upstreamResponse.on('end', () => {
       const raw = Buffer.concat(chunks)
       const decoded = decompressBody(raw, upstreamResponse.headers['content-encoding'])
@@ -366,7 +440,7 @@ export function startLanGateway(options) {
   const scripts = injectHostClaim ? [RANDOM_UUID_POLYFILL, HOST_CLAIM_SCRIPT] : [RANDOM_UUID_POLYFILL]
 
   /** Refuse (403/401) or admit one request; returns true when the caller may proceed. */
-  const admit = (request, response) => {
+  const admit = (request: IncomingMessage, response: ServerResponse): boolean => {
     const address = request.socket.remoteAddress
     if (!isAddressAllowed(address, ranges, allowLoopback)) {
       log('warn', `lan-link gateway: refused ${String(address)} (outside the allow list)`)
@@ -421,12 +495,13 @@ export function startLanGateway(options) {
   })
 
   server.on('upgrade', (request, socket, head) => {
+    const client = socket as Socket
     if (!isAddressAllowed(request.socket.remoteAddress, ranges, allowLoopback) ||
         (basicEnabled && !checkBasicAuth(request.headers.authorization, username, password))) {
-      socket.end('HTTP/1.1 403 Forbidden\r\nconnection: close\r\n\r\n')
+      client.end('HTTP/1.1 403 Forbidden\r\nconnection: close\r\n\r\n')
       return
     }
-    const headers = {}
+    const headers: OutgoingHttpHeaders = {}
     for (const [key, value] of Object.entries(request.headers)) {
       if (UPGRADE_DROP.has(key.toLowerCase())) continue
       headers[key] = value
@@ -443,33 +518,35 @@ export function startLanGateway(options) {
       }
       upstream.write(`${lines.join('\r\n')}\r\n\r\n`)
       if (head.length > 0) upstream.write(head)
-      upstream.pipe(socket)
-      socket.pipe(upstream)
+      upstream.pipe(client)
+      client.pipe(upstream)
     })
-    upgradedSockets.add(socket)
+    upgradedSockets.add(client)
     // A device that vanishes resets its tunnel rather than closing it, and Node
     // removed its own socket error listener when it handed the socket to
     // 'upgrade': without this listener that ECONNRESET arrives as an uncaught
     // error event, and the harness host treats an uncaught exception as fatal
     // for the whole process — one phone losing Wi-Fi took the desktop app down.
-    socket.on('error', () => socket.destroy())
-    socket.once('close', () => {
-      upgradedSockets.delete(socket)
+    client.on('error', () => client.destroy())
+    client.once('close', () => {
+      upgradedSockets.delete(client)
       upstream.destroy()
     })
     upstream.on('error', () => {
-      upgradedSockets.delete(socket)
-      socket.destroy()
+      upgradedSockets.delete(client)
+      client.destroy()
     })
   })
 
-  const ready = new Promise((resolve, reject) => {
-    const onError = (error) => reject(error)
+  const ready = new Promise<{ port: number }>((resolve, reject) => {
+    const onError = (error: Error): void => reject(error)
     server.once('error', onError)
     server.listen(listenPort, listenHost, () => {
       server.off('error', onError)
       server.on('error', (error) => log('warn', `lan-link gateway: ${String(error)}`))
-      resolve({ port: server.address().port })
+      const address: AddressInfo | string | null = server.address()
+      if (typeof address === 'object' && address !== null) resolve({ port: address.port })
+      else reject(new Error('dsh-lan-gateway: the listener did not bind a TCP address'))
     })
   })
 
@@ -479,7 +556,7 @@ export function startLanGateway(options) {
    * mode; better to say so in the log than to leave the user guessing.
    * @returns `{ ok, reason }`.
    */
-  const probeHostClaimSeam = async () => {
+  const probeHostClaimSeam = async (): Promise<HostClaimProbe> => {
     if (!injectHostClaim) return { ok: true, reason: 'host claim disabled' }
     try {
       const document = await fetch(`http://${upstreamAuthority}/`, {
@@ -489,8 +566,9 @@ export function startLanGateway(options) {
       const html = await document.text()
       const match = /(plugins\/\?\?[^"']*dsh-client-connection\/client\.js[^"']*)/.exec(html)
       if (match === null) return { ok: false, reason: 'the connection client bundle is not referenced by the served index' }
-      const bundleUrl = match[1].replaceAll('&amp;', '&')
-      const bundle = await fetch(`http://${upstreamAuthority}/${bundleUrl}`, {
+      const bundleUrl = match[1]
+      if (bundleUrl === undefined) return { ok: false, reason: 'the connection client bundle is not referenced by the served index' }
+      const bundle = await fetch(`http://${upstreamAuthority}/${bundleUrl.replaceAll('&amp;', '&')}`, {
         headers: { cookie, 'accept-encoding': 'identity' }
       })
       const code = await bundle.text()
@@ -502,12 +580,12 @@ export function startLanGateway(options) {
     }
   }
 
-  const close = async () => {
+  const close = async (): Promise<void> => {
     if (closed) return
     closed = true
     for (const socket of upgradedSockets) socket.destroy()
     upgradedSockets.clear()
-    await new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
       server.close(() => resolve())
       const timer = setTimeout(() => server.closeAllConnections(), 250)
       timer.unref?.()
@@ -524,7 +602,7 @@ export function startLanGateway(options) {
       return typeof address === 'object' && address !== null ? address.port : listenPort
     },
     /** Human-readable URLs for the given addresses, in input order. */
-    describeUrls(boundPort, addresses) {
+    describeUrls(boundPort: number, addresses: string[]): string[] {
       return addresses.map((address) => `http://${address}:${String(boundPort)}/`)
     }
   }
