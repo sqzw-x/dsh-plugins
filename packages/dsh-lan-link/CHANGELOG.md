@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+### Minor Changes
+
+- c7d5917: 把 host 半区从手写 `lib/*.js` 迁到 TypeScript（`src/index.ts`、`src/gateway.ts`），随包发布 `index.d.ts` / `gateway.d.ts`；运行时行为不变，`lib/` 改由 `pnpm build` 生成、`prepack` 保证发布时存在。
+
 本文件记录 `dsh-lan-link` 的对外变更。0.2.0 是首个公开发布（GitHub 与 npm 同步）。
 
 ## 0.2.1 — 2026-10-21

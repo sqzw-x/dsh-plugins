@@ -1,6 +1,6 @@
 {
   "name": "dsh-system-prompt-insertion",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "User-owned system-prompt insertion for DeepSeek Harness: place your own text at the head, middle, or tail of the assembled prompt, and edit it from a left-column Web panel with a live preview.",
   "license": "MIT",
   "type": "module",
