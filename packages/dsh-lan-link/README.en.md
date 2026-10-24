@@ -95,10 +95,15 @@ Install `dsh-lan-link` from Settings → Plugins, enable it, and restart when pr
 ### Command line
 
 ```sh
-# from npm
+# From npm (prebuilt, no local build)
 dsh plugin --profile <profile> add dsh-lan-link
+```
 
-# from GitHub
+Installing from the GitHub source also works, but pnpm will ask you to allow the
+package's build script (`prepack` produces `lib/`). Add the `allowBuilds` entry
+pnpm prints to the profile's `pnpm-workspace.yaml`, then retry:
+
+```sh
 dsh plugin --profile <profile> add "github:sqzw-x/dsh-plugins#path:packages/dsh-lan-link"
 ```
 

@@ -95,10 +95,13 @@ http://192.168.0.2:19387/?token=…
 ### 命令行
 
 ```sh
-# 从 npm
+# 从 npm（预构建，无需本地构建）
 dsh plugin --profile <profile> add dsh-lan-link
+```
 
-# 从 GitHub
+从 GitHub 源码安装也可以，但 pnpm 会要求允许本包运行构建脚本（`prepack` 生成 `lib/`）；把 pnpm 提示的 `allowBuilds` 条目写进 profile 的 `pnpm-workspace.yaml` 后重试：
+
+```sh
 dsh plugin --profile <profile> add "github:sqzw-x/dsh-plugins#path:packages/dsh-lan-link"
 ```
 
