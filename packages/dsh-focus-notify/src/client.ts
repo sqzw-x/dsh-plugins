@@ -14,6 +14,9 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { AlertEngine, type Alert, type AlertConfig, type PendingInteraction } from './engine.ts'
 import { VERSION } from './version.ts'
 
+/** Longest reply excerpt a notification carries; macOS truncates the body anyway. */
+const PREVIEW_MAX_CHARS = 100
+
 /** Config key in `localStorage`. */
 const CONFIG_KEY = 'dshFocusNotify.config'
 /** Pre-rename key, read once so existing local settings survive the rename. */
@@ -38,7 +41,9 @@ const DEFAULTS: AlertConfig = {
   enabled: true,
   ignoreSubagent: true,
   language: 'auto',
-  sound: false
+  sound: false,
+  preview: true,
+  sessionTitle: false
 }
 
 /** The observable store shape this plugin depends on (getSnapshot + subscribe). */
@@ -118,6 +123,39 @@ export function apply(ctx: Context): () => void {
   return run()
 }
 
+/**
+ * Beginning of the last assistant reply of one conversation.
+ *
+ * Only the conversation the page has *bound* exposes a transcript snapshot, so
+ * this returns `undefined` for every other conversation — the notification
+ * falls back to its status copy instead. A host that publishes no binding at all
+ * (an older shell) is the same "no preview" answer.
+ */
+function readPreview(ctx: { get(name: string): unknown }, sessionId: SessionId): string | undefined {
+  try {
+    const sessions = ctx.get('sessions') as
+      | { binding?: (id: SessionId) => { session?: { getSnapshot?: () => unknown } } | undefined }
+      | null
+    const snapshot = sessions?.binding?.(sessionId)?.session?.getSnapshot?.() as
+      | { nodes?: Array<{ kind?: string; blocks?: Array<{ kind?: string; text?: string }> }> }
+      | undefined
+    const nodes = snapshot?.nodes
+    if (!Array.isArray(nodes)) return undefined
+    for (let i = nodes.length - 1; i >= 0; i -= 1) {
+      const node = nodes[i]
+      if (node?.kind !== 'assistant' || !Array.isArray(node.blocks)) continue
+      for (let b = node.blocks.length - 1; b >= 0; b -= 1) {
+        const block = node.blocks[b]
+        if (block?.kind !== 'text' || typeof block.text !== 'string') continue
+        const text = block.text.replace(/\s+/g, ' ').trim()
+        if (text === '') continue
+        return text.length > PREVIEW_MAX_CHARS ? `${text.slice(0, PREVIEW_MAX_CHARS)}…` : text
+      }
+    }
+  } catch { /* a host without a bound transcript simply has no preview */ }
+  return undefined
+}
+
 function start(ctx: { get(name: string): unknown }): () => void {
   const config = readConfig()
   const disposers: Array<() => void> = []
@@ -179,7 +217,8 @@ function start(ctx: { get(name: string): unknown }): () => void {
     config: () => config,
     focused: windowHasFocus,
     canNotify: () => permission() === 'granted',
-    language: resolvedLanguage
+    language: resolvedLanguage,
+    preview: sessionId => readPreview(ctx, sessionId)
   })
 
   // ── delivery ────────────────────────────────────────────────────────────

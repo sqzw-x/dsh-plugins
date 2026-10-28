@@ -51,6 +51,10 @@ export interface AlertConfig {
   language: 'auto' | 'zh' | 'en'
   /** Optional WebAudio chime on top of the system notification. */
   sound: boolean
+  /** Show the beginning of the finished reply, when the host exposes it. */
+  preview: boolean
+  /** Put the conversation name in the title line instead of the fixed `DSH · …` prefix. */
+  sessionTitle: boolean
 }
 
 /** Everything the engine needs from its host. */
@@ -63,6 +67,8 @@ export interface EngineDeps {
   canNotify(): boolean
   /** Copy language, already resolved to a shipped dictionary. */
   language(): 'zh' | 'en'
+  /** Beginning of the last assistant text of one conversation, when the host exposes it. */
+  preview?(sessionId: SessionId): string | undefined
   /** Injectable clock, for tests. */
   now?(): number
 }
@@ -321,11 +327,27 @@ export class AlertEngine {
 
   private doneAlert(sessionId: SessionId): Alert {
     const copy = COPY[this.deps.language()]
+    const config = this.deps.config()
+    const label = this.label(sessionId)
+    const preview = config.preview ? this.deps.preview?.(sessionId)?.trim() || undefined : undefined
+    // A finished reply says more than "it finished": when the host can hand over
+    // the beginning of the last assistant text, that text is the body. The
+    // layout switch is separate — putting the conversation in the title is a
+    // different question from whether to show content at all.
+    if (config.sessionTitle) {
+      return {
+        kind: 'done',
+        sessionId,
+        title: label,
+        body: preview ?? copy.doneBody,
+        tag: `dsh-focus-notify:${sessionId}`
+      }
+    }
     return {
       kind: 'done',
       sessionId,
       title: copy.doneTitle,
-      body: `${this.label(sessionId)} · ${copy.doneBody}`,
+      body: preview === undefined ? `${label} · ${copy.doneBody}` : `${label} · ${preview}`,
       tag: `dsh-focus-notify:${sessionId}`
     }
   }

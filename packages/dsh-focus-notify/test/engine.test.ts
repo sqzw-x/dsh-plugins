@@ -27,6 +27,7 @@ function makeEngine(options = {}) {
     focused: () => state.focused,
     canNotify: () => state.permission === 'granted',
     language: () => (state.config.language === 'en' ? 'en' : 'zh'),
+    preview: options.preview,
     now: () => state.now
   })
   return { engine, state }
@@ -274,4 +275,51 @@ test('forced() 绕过规则，供测试按钮使用', () => {
   const alert = engine.forced('attention', 's-current')
   assert.equal(alert.kind, 'attention')
   assert.equal(alert.tag, 'dsh-focus-notify:s-current')
+})
+
+test('宿主给得出回复开头时，完成提醒把开头放进正文', () => {
+  const { engine } = makeEngine({
+    focused: false,
+    preview: (id) => (id === 's-other' ? '已经把登录流程拆成三步，剩下两步待你确认' : undefined),
+    config: { preview: true }
+  })
+  engine.onList(listSnapshot({ 's-other': row('别的对话') }))
+  seed(engine)
+  engine.onStatus(status({ 's-other': { running: true, pendingInteraction: undefined } }))
+  const done = engine.onStatus(status({ 's-other': { running: false, pendingInteraction: undefined } }))
+  assert.equal(done[0].title, 'DSH · 回复完成')
+  assert.equal(done[0].body, '别的对话 · 已经把登录流程拆成三步，剩下两步待你确认')
+})
+
+test('关掉 preview 就退回状态文案，即使宿主给得出开头', () => {
+  const { engine } = makeEngine({ focused: false, preview: () => '这段不该出现', config: { preview: false } })
+  engine.onList(listSnapshot({ 's-other': row('别的对话') }))
+  seed(engine)
+  engine.onStatus(status({ 's-other': { running: true, pendingInteraction: undefined } }))
+  const done = engine.onStatus(status({ 's-other': { running: false, pendingInteraction: undefined } }))
+  assert.equal(done[0].body, '别的对话 · 回复已完成')
+})
+
+test('sessionTitle 打开后，标题是会话名、正文是回复开头', () => {
+  const { engine } = makeEngine({
+    focused: false,
+    preview: () => '改完了，测试也过了',
+    config: { preview: true, sessionTitle: true }
+  })
+  engine.onList(listSnapshot({ 's-other': row('别的对话') }))
+  seed(engine)
+  engine.onStatus(status({ 's-other': { running: true, pendingInteraction: undefined } }))
+  const done = engine.onStatus(status({ 's-other': { running: false, pendingInteraction: undefined } }))
+  assert.equal(done[0].title, '别的对话')
+  assert.equal(done[0].body, '改完了，测试也过了')
+})
+
+test('sessionTitle 打开但没有开头时，正文退回状态文案', () => {
+  const { engine } = makeEngine({ focused: false, config: { sessionTitle: true } })
+  engine.onList(listSnapshot({ 's-other': row('别的对话') }))
+  seed(engine)
+  engine.onStatus(status({ 's-other': { running: true, pendingInteraction: undefined } }))
+  const done = engine.onStatus(status({ 's-other': { running: false, pendingInteraction: undefined } }))
+  assert.equal(done[0].title, '别的对话')
+  assert.equal(done[0].body, '回复已完成')
 })
