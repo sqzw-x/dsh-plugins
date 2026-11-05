@@ -82,11 +82,11 @@ Clicking a notification raises the window (the `dsh://open` deep link on the des
 - Notification presentation is up to the platform (macOS: System Settings → Notifications → DeepSeek Harness).
 - A denied permission means no notifications; `__dshFocusNotify.debug().permission` reports `denied`.
 - **Completions are detected from the `running` edge, not from the SDK's `completionUnread`.** The latter is the sidebar's unread dot: upstream clears it while the main view holds the session and as soon as `running` turns true, so using it as the "reply finished" signal would silently stop background-completion alerts. The trade-off is that a reply finishing before the client ever observes `running === true` (say, across a page reload) does not alert.
-- `dsh.compatibility.dshReleases` in `package.json` is **informational only**: nothing in DSH 0.2.0-rc.2 reads it. The real gate is `peerDependencies` on `@deepseek-ai/dsh*` — this package declares `@deepseek-ai/cordis`, whose prefix is not checked, so that peer is inert, exactly as in upstream packages like `dsh-client-ui-session`.
+- Compatibility: tested on **DSH 0.2.2-rc.1** (Node >= 24.9). `dsh.compatibility.dshReleases` in `package.json` is **informational** for plugin directories; the runtime install gate is `engines.dsh` (declared here), which short-circuits `peerDependencies` when present.
 
 ## Development
 
-Node 22.18+ (toolchain only: tsdown requires `^22.18.0 || ^24.11.0 || >=26.0.0` and CI runs 22/24 — the shipped bundle runs in the browser and does not care about the Node version).
+Node 22.18+ (toolchain only: tsdown requires `^22.18.0 || ^24.11.0 || >=26.0.0` and CI runs 22/24/26; the DSH 0.2.2 host itself requires Node >= 24.9, while the shipped bundle runs in the browser and does not care about the Node version).
 
 ```sh
 npm install && npm test

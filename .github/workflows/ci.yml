@@ -23,9 +23,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # tsdown 0.23 needs a modern Node; the shipped artifacts themselves run
-        # wherever the harness runs.
-        node: [22, 24]
+        # 24 and 26 cover the DSH 0.2.2 host line (Node >= 24.9); 22 remains the
+        # lower bound the plugin code and tsdown toolchain still support.
+        node: [22, 24, 26]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

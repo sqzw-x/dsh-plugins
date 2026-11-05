@@ -133,7 +133,7 @@ dsh plugin --profile web add dsh-system-prompt-insertion
 
 ## 兼容性与限制
 
-- 目标 `@deepseek-ai/*` **0.2.1-rc.2**（cordis 4.0.5 / schemastery 3.18.5 实测）。
+- 目标 `@deepseek-ai/*` **0.2.2-rc.1**（cordis 4.1.0 / schemastery 3.19.0 实测）。
 - 宿主没有 `webServer`（headless / acp / sdk）时，只有侧栏面板消失，段落注册照常。
 - `{{...}}` 是严格插值：开启插值又写了未知变量，请求会在组装阶段失败——所以默认关闭。
 - 段落文字属于请求前缀，改动会让之后的缓存前缀失效；把稳定文本放「末尾」，比频繁改「开头」更省。

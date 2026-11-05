@@ -103,11 +103,11 @@ __dshFocusNotify.open('session-id')            // 按 id 切会话（缺省切�
 - 通知的展示样式由系统决定（macOS：系统设置 → 通知 → DeepSeek Harness）。
 - 权限被拒绝时不发通知，`__dshFocusNotify.debug().permission` 会显示 `denied`。
 - **完成判定用 `running` 边沿，不用 SDK 的 `completionUnread`**：后者是侧栏的未读圆点，上游在主视图持有该会话时、以及 `running` 一旦为真时就清掉它 —— 拿它当"回复完成"的信号会让后台会话的完成提醒静默消失。代价是"客户端还没看到 `running === true` 就完成的回复"不提醒（例如回复恰好横跨一次页面重载）。
-- `package.json` 的 `dsh.compatibility.dshReleases` 只是**信息性声明**：DSH 0.2.0-rc.2 里没有代码读它，真正的兼容闸门是 `peerDependencies` 里的 `@deepseek-ai/dsh*`（本包声明的 `@deepseek-ai/cordis` 不在被检查的前缀里，因此是惰性的，与上游 `dsh-client-ui-session` 等包一致）。
+- 兼容性：已在 **DSH 0.2.2-rc.1**（Node ≥24.9）实测。`package.json` 的 `dsh.compatibility.dshReleases` 是给插件市场和目录看的**信息性声明**；DSH 的运行时装机闸门看 `engines.dsh`（本包已声明），存在时不再检查 `peerDependencies`。
 
 ## 开发
 
-需要 Node 22.18+（构建工具链的要求：tsdown `^22.18.0 || ^24.11.0 || >=26.0.0`，CI 跑 22/24；产物本身只跑在浏览器里，与 Node 版本无关）。
+需要 Node 22.18+（构建工具链的要求：tsdown `^22.18.0 || ^24.11.0 || >=26.0.0`，CI 跑 22/24/26；DSH 0.2.2 宿主本身要求 Node ≥24.9，产物只跑在浏览器里，与 Node 版本无关）。
 
 ```sh
 npm install

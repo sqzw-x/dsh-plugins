@@ -68,7 +68,8 @@
     "compatibility": {
       "dshReleases": {
         "0.2.0-rc.2": "compatible",
-        "0.2.1-rc.2": "compatible"
+        "0.2.1-rc.2": "compatible",
+        "0.2.2-rc.1": "compatible"
       }
     },
     "client": {
@@ -81,7 +82,7 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/cordis": "~4.0.4 || ~4.1.0",
     "@deepseek-ai/schemastery": "*",
     "@deepseek-ai/dsh-agent": "*",
     "@deepseek-ai/dsh-compaction": "*",
