@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+### Patch Changes
+
+- d5b2585: **npm 上的仓库地址指回单一仓库。** 这两个包上一次发布时还各自对应独立仓库（`sqzw-x/dsh-focus-notify`、`sqzw-x/dsh-notes-context`），仓库合并进 `dsh-plugins` 后已删除，但 npm 上已发布版本的 `repository` 字段仍是旧地址，插件市场因此无法把包挂到收录条目上：条目只能退回从源码安装（要过一次构建授权），也不显示下载量与版本。本次发布把该字段刷新为 `sqzw-x/dsh-plugins`；代码无变化。
+
 ## Unreleased
 
 - **兼容声明**：`package.json` 增加 `engines.dsh`，覆盖已实测的 `0.2.0-rc.2` 与 `0.2.1-rc.2`；插件市场和新版本 DSH 会据此显示/校验兼容性。
@@ -142,7 +148,7 @@ Initial release. Ports omp's **notes-backed context windows** to DeepSeek Harnes
 
 - **`context_notes` tool** — the model's persistent notebook. Omit `text` to read,
   pass `text` to replace wholesale, pass `''` to clear. Enforced against a UTF-8 byte
-  bound (default 16 KiB) *before* anything is stored, so an over-long write never
+  bound (default 16 KiB) _before_ anything is stored, so an over-long write never
   leaves a partial record.
 - **`context_history` tool** — reads the active session's raw transcript back by stable
   `seq` range, marks compaction boundaries (including the `compact-checkpoint`
@@ -175,5 +181,5 @@ Two constraints in DSH 0.2.0-rc.2 shaped the implementation; both are documented
 2. **A tool cannot append to the surface from inside `execute`.** Doing so places the
    message before the tool's own result and produces
    `assistant(tool-call) → user → tool`, which providers reject. Notebook delivery uses
-   `exec.deferContext(...)`, which the loop drains into the next-step inbox *after* the
+   `exec.deferContext(...)`, which the loop drains into the next-step inbox _after_ the
    tool result.
