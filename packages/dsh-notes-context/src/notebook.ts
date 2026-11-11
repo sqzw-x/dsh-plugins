@@ -114,10 +114,12 @@ export class NotebookTooLargeError extends Error {
  *
  * - `materialized: false` — the revision is awaiting delivery at the next step
  *   boundary; its `user/message` has not reached the log yet, so `seq` is
- *   `undefined`. Nothing is wrong and a repair must NOT re-publish it.
+ *   `undefined`. Nothing is wrong: the model is about to receive it, and a
+ *   reader must not report it as lost.
  * - `materialized: true` — the revision reached the log but a rollover SHADOWED
- *   it, so it stays readable while dropping out of context. This is the
- *   condition a repair must act on, and re-publishing is the correct response.
+ *   it, so it stays readable while dropping out of context. The checkpoint that
+ *   shadowed it carries the notebook in full, and `context_notes` returns it
+ *   whole; the flag is what lets that read describe the situation truthfully.
  */
 export interface NotebookState {
 	/** The notebook text exactly as written. */
@@ -164,8 +166,8 @@ interface SessionNotebookState {
 	 * answers while changing NEITHER the log (`writeNotebook` does not append) NOR
 	 * the surface, so it is the only signal that can invalidate the memo for that
 	 * window. Without it a write would serve the previous revision until its
-	 * message materialized, corrupting both the rollover projection and the
-	 * repair guard.
+	 * message materialized, corrupting both the rollover projection and every
+	 * reader's `visible` answer.
 	 */
 	version: number
 	/** The newest revision written in this process, if any. */
@@ -546,7 +548,8 @@ function recordFromToolCall(event: SessionEvent): string | undefined {
  *
  * If the newest materialized revision is shadowed, that invisible revision IS the
  * state returned (with `visible: false`) rather than an older visible one: the
- * repair is to re-publish the newest content, not to resurrect an older revision.
+ * newest text is the authoritative one, and reporting an older revision because
+ * it happens to still be on the surface would resurrect stale content.
  *
  * The log scan is O(n) and runs on the hot path of every step, so the answer is
  * memoized per session. The memo key must cover all THREE ways the answer can

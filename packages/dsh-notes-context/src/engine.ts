@@ -59,21 +59,22 @@
  * (300 chars) plus the `<compacted-summary>` tags plus this engine's rollover
  * template plus the notebook capped by `notebookSummaryMaxChars`. Measured with
  * the harness's own estimator (`@deepseek-ai/dsh-token-meter/estimate`;
- * 4 chars/token plus 4 per block) it is **225 tokens with no notebook and 738 at
- * the default 2048-character cap**. The shadowed span, by contrast, is
- * `thresholdTokens - retainTokens`, which at the parent's defaults
+ * 4 chars/token plus 4 per block) it is **225 tokens with no notebook and about
+ * 4,321 at the notebook's 16,384-character bound** — the default cap equals that
+ * bound, so a notebook the writer accepted is projected whole. The shadowed span,
+ * by contrast, is `thresholdTokens - retainTokens`, which at the parent's defaults
  * (`thresholdRatio 0.8`, `retainRatio 0.16`) is orders of magnitude larger for an
  * ordinary window: ~41,984 at a 128,000-token window and ~640,000 at 1,000,000,
- * against a fixed 738.
+ * against a fixed 4,321.
  *
  * So the guard is reachable only once the shadowed span itself becomes tiny — and
  * the parent's fixed `headroomTokens` (65536) makes that a narrow band rather
  * than a smooth function of window size. Working in
  * `messageBudgetTokens = contextWindow - reservedCompletionTokens`, the shadowed
  * span at the moment a rollover first becomes eligible is
- * `0.84 * messageBudgetTokens - 65536`, which drops below the 738-token framed
- * cost only while `messageBudgetTokens` lies between **78,020 and 78,896** — a
- * band 877 window sizes wide. At the defaults:
+ * `0.84 * messageBudgetTokens - 65536`, which drops below the 4,321-token framed
+ * cost only while `messageBudgetTokens` lies between **78,020 and 83,163** — a
+ * band 5,144 window sizes wide. At the defaults:
  *
  * - `messageBudgetTokens` below ~78,020 never reaches the guard: either the
  *   pressure budget is non-positive, or `retainTokens` is not below the
@@ -88,9 +89,12 @@
  * is. **For the deployed route that reserve is 0**, measured against the real
  * transaction rather than inferred: for a routed request whose header declares
  * no `maxTokens` and whose adapter declares no `defaultMaxTokens`, the guard
- * fires at `contextWindow` 78,500 and 78,896 (selected spans of ~260 and ~737
- * tokens against the 738-token fixed cost) and every trial from 100,000 upward
- * succeeds. Had the reserve been 65536 the engine would have thrown
+ * fired at `contextWindow` 78,500 and 78,896 when the fixed cost was 738 tokens
+ * (the earlier 2,048-character cap; selected spans of ~260 and ~737 tokens), and
+ * every trial from 100,000 upward succeeded. At the current 16,384-character
+ * bound the same arithmetic puts that upper edge at ~83,163: the band is wider
+ * because the fixed cost is larger, and it is still nowhere near an ordinary
+ * window. Had the reserve been 65536 the engine would have thrown
  * `TargetPressureConfigError` at those same sizes instead, because
  * `contextWindow - 2 * 65536` is negative there.
  *
@@ -176,7 +180,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock, Message, TokenUsage, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { baseEngineConfig, resolveReserveTokens, type Config as NotesLiveConfig } from './config.ts'
 import { notebookBlock } from './inject.ts'
-import { latestNotebook, type NotebookState } from './notebook.ts'
+import { latestNotebook, CONTEXT_NOTES_TOOL_NAME, type NotebookState } from './notebook.ts'
 
 /**
  * Structural mirror of the parent's `SummarizationInput`
@@ -240,8 +244,8 @@ const NO_NOTEBOOK_NOTE = [
 	'recent tail and from raw history at context_history.',
 ].join('\n')
 
-/** Appended after a notebook truncated to the configured summary cap. */
-const TRUNCATION_NOTE = '\n[notebook truncated to fit the static rollover summary; read context_history for the full text]'
+/** Appended after a notebook truncated to a configured cap below the byte bound. */
+const TRUNCATION_NOTE = `\n[notebook truncated to the configured summary cap; read ${CONTEXT_NOTES_TOOL_NAME} for the full text]`
 
 /**
  * The pressure policy fields one engine resolved for its routed target.
@@ -368,6 +372,10 @@ export function resolveThresholdTokens(
 
 /**
  * Bound text to a character cap without splitting a surrogate pair.
+ *
+ * At the default cap (the notebook's own 16,384-byte bound) this never fires: the
+ * writer rejects anything longer, and the byte bound admits at most that many
+ * characters. It stays for a profile that lowers `notebookSummaryMaxChars`.
  *
  * @param text - the text to bound.
  * @param maxChars - inclusive character cap.

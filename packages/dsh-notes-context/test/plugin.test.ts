@@ -127,6 +127,9 @@ test('the composed schema fills base compaction defaults and plugin defaults', (
 	const resolved = notesConfig()
 	// Plugin-owned.
 	assert.equal(resolved.maxNotebookBytes.get(), 16384)
+	// The projection cap defaults to the notebook's own bound, so a notebook the writer
+	// accepted is projected whole: truncation needs a profile to lower this explicitly.
+	assert.equal(resolved.notebookSummaryMaxChars.get(), resolved.maxNotebookBytes.get())
 	assert.equal(resolved.reminderEnabled.get(), true)
 	assert.equal(resolved.rolloverText.get(), DEFAULT_ROLLOVER_TEMPLATE)
 	// Base-engine-owned: composed in, so a user configures them on the same row.
@@ -372,12 +375,14 @@ test('every plugin-owned field resolves to a read handle, never a plain value', 
 test('documented defaults are unchanged and readable through .get()', () => {
 	const resolved = notesConfig()
 	assert.equal(resolved.maxNotebookBytes.get(), 16384)
+	// The projection cap defaults to the notebook's own bound, so a notebook the writer
+	// accepted is projected whole: truncation needs a profile to lower this explicitly.
+	assert.equal(resolved.notebookSummaryMaxChars.get(), resolved.maxNotebookBytes.get())
 	assert.equal(resolved.reminderEnabled.get(), true)
 	assert.equal(resolved.enabled.get(), true)
 	assert.equal(resolved.thresholdTokens.get(), -1)
 	assert.equal(resolved.keepRecentTokens.get(), 20000)
 	assert.equal(resolved.reserveTokens.get(), undefined)
-	assert.equal(resolved.notebookSummaryMaxChars.get(), 2048)
 	assert.equal(resolved.historyDefaultLimit.get(), 200)
 	assert.equal(resolved.maxHistoryEntries.get(), 500)
 	assert.equal(resolved.maxHistoryBytes.get(), 51200)
