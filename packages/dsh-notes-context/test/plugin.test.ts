@@ -220,9 +220,56 @@ test('revisions stay exactly sequential when every call is logged first', () => 
 				toolCallId: `call-${n}`,
 			},
 		}, { surfaceOp: 'append' })
-		// The write's own message is delivered by deferContext, not session.append.
+		// The write path appends nothing: the call and this result are its whole record.
 	}
 	assert.equal(latestNotebook(session)?.revision, 3)
+})
+
+test('a refused write is not recovered from its tool/call argument', () => {
+	// A rejected write leaves two traces: the request in `tool/call` and a failed
+	// result. Recovery must pair them, or a notebook the plugin already refused
+	// comes back as current after a restart.
+	const session = newSession('reject-1')
+	session.append('tool/call', {
+		callId: 'call-rej',
+		name: 'context_notes',
+		arguments: JSON.stringify({ text: 'TOO BIG' }),
+	})
+	session.append('tool/result', {
+		message: {
+			id: 'r-1',
+			role: 'tool',
+			content: [{ type: 'text', text: 'notebook is 999999 bytes which exceeds the configured maxNotebookBytes of 16384' }],
+			source: { kind: 'tool', toolCallId: 'call-rej' },
+			toolCallId: 'call-rej',
+			isError: true,
+		},
+	}, { surfaceOp: 'append' })
+	assert.equal(latestNotebook(session), undefined)
+})
+
+test('an accepted write is still recovered from its tool/call argument', () => {
+	// The guard above must not swallow ordinary writes: a successful result carries
+	// a revision account, and the request supplies the text.
+	const session = newSession('accept-1')
+	session.append('tool/call', {
+		callId: 'call-ok',
+		name: 'context_notes',
+		arguments: JSON.stringify({ text: 'KEPT' }),
+	})
+	session.append('tool/result', {
+		message: {
+			id: 'r-2',
+			role: 'tool',
+			content: [{ type: 'text', text: 'Notebook revision 1 — 4/16384 bytes (16380 remaining).' }],
+			source: { kind: 'tool', toolCallId: 'call-ok' },
+			toolCallId: 'call-ok',
+		},
+	}, { surfaceOp: 'append' })
+
+	const recovered = latestNotebook(session)
+	assert.equal(recovered?.text, 'KEPT')
+	assert.equal(recovered?.revisionTrusted, true)
 })
 
 test('clearing the notebook is a revision, not a deletion', () => {

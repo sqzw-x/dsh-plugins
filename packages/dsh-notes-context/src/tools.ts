@@ -444,7 +444,7 @@ export function registerTools(ctx: Context, cfg: Config): boolean {
 		defineTool({
 			name: CONTEXT_NOTES_TOOL,
 			description:
-				'Read or replace your persistent notebook. The notebook is a durable, model-written record that survives context rollovers; it is replayed to you at the start of later context windows. Call with no `text` to read the current notebook, with `text` to replace it wholesale, or with an empty `text` to clear it. Keep it short and high-signal: it is a working state record, not a transcript.',
+				'Read or replace your persistent notebook. The notebook is a durable, model-written record that survives context rollovers: it is written into the checkpoint at each rollover, and this tool returns it whole at any time. Call with no `text` to read the current notebook, with `text` to replace it wholesale, or with an empty `text` to clear it. Keep it short and high-signal: it is a working state record, not a transcript.',
 			parameters: {
 				text: {
 					type: 'string',
@@ -497,7 +497,7 @@ export function registerTools(ctx: Context, cfg: Config): boolean {
 									? 'This revision is currently in your context.'
 									: value.materialized
 										? 'NOTE: this revision was dropped from your visible context by a rollover; the text below is read from the log and is authoritative.'
-										: 'This revision was accepted and is queued for delivery to you at the next step boundary (it is not in your context yet).',
+										: 'This revision has no message of its own in the conversation. It is written into the checkpoint at the next rollover, and this read is the authoritative copy.',
 								'',
 								value.text,
 							].join('\n'),
@@ -528,12 +528,13 @@ export function registerTools(ctx: Context, cfg: Config): boolean {
 				const maxNotebookBytes = cfg.maxNotebookBytes.get()
 				if (exec.signal.aborted) throw new Error(`${CONTEXT_NOTES_TOOL} was cancelled`)
 				if (args.text !== undefined) {
-					// Validated, revision-allocated, and recorded — but deliberately NOT
-					// appended. Appending here would place this user/message on the
-					// surface BEFORE the tool result of this very call, and a provider
-					// rejects an assistant tool call that is not immediately followed by
-					// its result. `deferContext` rides the result instead and is drained
-					// only after that result is committed.
+					// Validated, revision-allocated, and recorded in the per-session
+					// registry — but NOT appended and NOT delivered. The notebook does not
+					// need a model-visible copy of its own: the call's `tool/call` argument
+					// already carries the text durably, the next rollover projects the
+					// notebook into its checkpoint, and `context_notes` reads it back on
+					// demand. Re-delivering it as a `user/message` would put the same text
+					// in the conversation a second time for no new information.
 					let written
 					try {
 						written = writeNotebook(session, args.text, { maxNotebookBytes })
@@ -543,7 +544,6 @@ export function registerTools(ctx: Context, cfg: Config): boolean {
 						if (error instanceof NotebookTooLargeError) markNotebookWriteRejected(session, args.text)
 						throw error
 					}
-					exec.deferContext(written.message)
 					return {
 						present: written.text.length > 0,
 						visible: false,
