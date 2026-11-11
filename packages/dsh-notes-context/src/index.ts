@@ -71,7 +71,8 @@ export {
 	type PendingNotebook,
 } from './notebook.ts'
 export { notebookBlock, notebookMessage, reminderMessage, unwrapNotebookBlock } from './inject.ts'
-export { CONTEXT_NOTES_TOOL, CONTEXT_HISTORY_TOOL } from './tools.ts'
+export { CONTEXT_NOTES_TOOL, CONTEXT_HISTORY_TOOL, readHistory } from './tools.ts'
+export type { HistoryReadOptions, HistoryScope } from './tools.ts'
 
 /** Stable plugin identity for fiber diagnostics and logger names. */
 export const name = 'notes-context'

@@ -27,6 +27,7 @@ import {
 	notebookBytes,
 	resolveReminderBand,
 	resolveReminderLeadTokens,
+	readHistory,
 	resolveReserveTokens,
 	writeNotebook,
 } from '../lib/index.js'
@@ -459,4 +460,120 @@ test('baseEngineConfig forwards user-set base knobs as plain values, excluding v
 		const isHandle = typeof value === 'object' && value !== null && !Array.isArray(value) && typeof value.get === 'function'
 		assert.equal(isHandle, false, `${key} must be a plain value, not a volatile handle`)
 	}
+})
+
+// ---------------------------------------------------------------- history search
+
+/**
+ * Append one message-shaped event to the log.
+ *
+ * `user/message` carries the message itself; every other shape wraps it in
+ * `message` — the distinction that made `tool/result` render empty.
+ *
+ * @param session - the session to append to.
+ * @param type - the event type.
+ * @param role - the message role.
+ * @param text - the body text.
+ * @returns the appended event's seq.
+ */
+function appendMessage(session, type, role, text) {
+	const content = [{ type: 'text', text }]
+	const message = { id: `m-${String(session.seq)}`, role, content, source: { kind: 'user' } }
+	const surface = { surfaceOp: 'append' }
+	if (type === 'user/message') return session.append(type, message, surface)
+	return session.append(type, { turn: 1, step: 1, message }, surface)
+}
+
+/** A signal no test aborts. */
+function liveSignal() {
+	return new AbortController().signal
+}
+
+test('a search finds tool output past the summary cap and shows the hit', () => {
+	const session = newSession('search-1')
+	const filler = 'x'.repeat(400)
+	appendMessage(session, 'tool/result', 'tool', `${filler} the build failed with ENOENT on package.json`)
+	const cfg = notesConfig()
+
+	// A plain read shows only the head, so the phrase is invisible there.
+	const read = readHistory(session, { raw: false }, cfg, liveSignal())
+	assert.equal(read.lines.length, 1)
+	assert.equal(read.lines[0].includes('ENOENT'), false)
+	// The tool result must not render as an empty body just because it wraps its
+	// message: that bug hid every tool output from both reads and searches.
+	assert.equal(read.lines[0].includes('x'.repeat(150)), true)
+
+	const hit = readHistory(session, { query: 'ENOENT' }, cfg, liveSignal())
+	assert.equal(hit.lines.length, 1)
+	assert.equal(hit.lines[0].includes('ENOENT'), true)
+	assert.equal(hit.lines[0].includes('…'), true)
+	assert.equal(hit.text.includes('1 matches for "ENOENT"'), true)
+})
+
+test('a search is a literal substring unless regex is set', () => {
+	const session = newSession('search-2')
+	appendMessage(session, 'user/message', 'user', 'value axb here')
+	const cfg = notesConfig()
+
+	// `a.b` must not match `axb`: the dot is escaped in literal mode.
+	assert.equal(readHistory(session, { query: 'a.b' }, cfg, liveSignal()).lines.length, 0)
+	assert.equal(readHistory(session, { query: 'a.b', regex: true }, cfg, liveSignal()).lines.length, 1)
+})
+
+test('a regex query matches and an invalid one fails loudly', () => {
+	const session = newSession('search-3')
+	appendMessage(session, 'user/message', 'user', 'ERR_42 then ERR_43')
+	const cfg = notesConfig()
+
+	const hits = readHistory(session, { query: 'ERR_\\d+', regex: true }, cfg, liveSignal())
+	assert.equal(hits.lines.length, 1)
+	assert.equal(hits.lines[0].includes('ERR_42'), true)
+
+	assert.throws(() => readHistory(session, { query: '(', regex: true }, cfg, liveSignal()), /invalid regular expression/u)
+})
+
+test('caseSensitive opts out of the default case folding', () => {
+	const session = newSession('search-4')
+	appendMessage(session, 'user/message', 'user', 'Deploy finished')
+	const cfg = notesConfig()
+
+	assert.equal(readHistory(session, { query: 'deploy' }, cfg, liveSignal()).lines.length, 1)
+	assert.equal(readHistory(session, { query: 'deploy', caseSensitive: true }, cfg, liveSignal()).lines.length, 0)
+})
+
+test('scope narrows a search to one kind of event', () => {
+	const session = newSession('search-5')
+	appendMessage(session, 'user/message', 'user', 'needle from the user')
+	appendMessage(session, 'tool/result', 'tool', 'needle from a tool')
+	appendMessage(session, 'assistant/message', 'assistant', 'needle from the model')
+	const cfg = notesConfig()
+
+	const byType = (scope) => readHistory(session, { query: 'needle', scope }, cfg, liveSignal()).lines
+	assert.equal(byType('user').length, 1)
+	assert.equal(byType('user')[0].includes('user/message'), true)
+	assert.equal(byType('tool_result').length, 1)
+	assert.equal(byType('tool_result')[0].includes('tool/result'), true)
+	assert.equal(byType('assistant').length, 1)
+	assert.equal(byType('all').length, 3)
+})
+
+test('the plugin own notebook messages are not user events', () => {
+	const session = newSession('search-6')
+	const written = writeNotebook(session, 'NOTEBODY is the marker', writeOptions())
+	session.append('user/message', written.message, { surfaceOp: 'append' })
+	const cfg = notesConfig()
+
+	assert.equal(readHistory(session, { query: 'NOTEBODY', scope: 'user' }, cfg, liveSignal()).lines.length, 0)
+	assert.equal(readHistory(session, { query: 'NOTEBODY' }, cfg, liveSignal()).lines.length, 1)
+})
+
+test('a range still bounds a search', () => {
+	const session = newSession('search-7')
+	const first = appendMessage(session, 'user/message', 'user', 'needle one')
+	appendMessage(session, 'user/message', 'user', 'needle two')
+	const cfg = notesConfig()
+
+	const bounded = readHistory(session, { query: 'needle', from: 0, to: Number(first.seq) }, cfg, liveSignal())
+	assert.equal(bounded.lines.length, 1)
+	assert.equal(bounded.lines[0].includes('needle one'), true)
 })
