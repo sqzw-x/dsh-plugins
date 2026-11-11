@@ -61,7 +61,7 @@ import { CONTEXT_NOTES_TOOL } from './tools.ts'
  * interpolated from its single definition so a rename cannot strand this copy.
  */
 const REMINDER_TEXT = `<context-window-reminder>
-The current context window is nearing its rollover threshold. Before important details fall out of the live tail, use ${CONTEXT_NOTES_TOOL} to save a concise durable notebook: current task state, decisions, changed files, evidence, blockers, and exact next steps. Keep the notebook a compact index with one line per item, no copied logs or file bodies, and replace stale entries instead of appending so it stays well under the configured cap. Do not request a new window until the notebook is current.
+The current context window is nearing its rollover threshold. Before important details fall out of the live tail, use ${CONTEXT_NOTES_TOOL} to save a concise durable notebook: current task state, decisions, changed files, evidence, blockers, and exact next steps. Keep the notebook a compact index with one line per item, no copied logs or file bodies, and replace stale entries instead of appending so it stays well under the configured cap.
 </context-window-reminder>`
 
 /**
