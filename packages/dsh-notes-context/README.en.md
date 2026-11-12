@@ -58,13 +58,25 @@ call is made.
 ### Raw history read-back `context_history`
 
 A rollover moves the replaced history out of the model's view; it does not delete it (the
-log is append-only). The model can read the original text back by `seq`:
+log is append-only). The model can read the original text back by `seq`, or search it:
 
 ```
-context_history                                 → index
-context_history { from: 120, to: 200 }          → range
-context_history { from: 0, to: 50, raw: true }  → raw text
+context_history                                        → index
+context_history { from: 120, to: 200 }                 → range
+context_history { from: 0, to: 50, raw: true }         → raw text
+context_history { query: "ENOENT" }                    → newest matches, as snippets
+context_history { query: "ERR_\\d+", regex: true }     → regular expression
+context_history { query: "needle", scope: "tool_result" } → tool output only
 ```
+
+`query` is a literal, case-insensitive match unless `regex: true`. Matching runs against the
+event body, **not** the summary: the summary is the first 200 characters, and a hit is often
+past it — so a matching entry renders as snippets around the hit (up to three per entry)
+rather than as the head of the body.
+
+`scope` is `all` (default), `user`, `assistant`, `tool_call`, or `tool_result`. The plugin's own
+notebook and reminder messages are user-shaped but are not `user` events here; read those with
+`context_notes`.
 
 ## Configuration
 
@@ -126,8 +138,9 @@ The bundle contains two patch rows: it disables `compaction-basic` and mounts th
 
 - **Notebook quality is decided by the model.** The plugin does not backfill or summarize
   for you. Anything the model failed to record must be recovered from raw history.
-- **Every write is a message that stays in the conversation.** Frequent rewrites grow the
-  context.
+- **A write produces no conversation message.** The notebook lives in the call record, in
+  the boundary checkpoint, and in whatever `context_notes` returns; seeing it again inside
+  the same window costs one tool call.
 - **A free boundary is not a free feature.** Writing the notebook is a tool call; the cost
   moves earlier rather than away.
 - **DSH's own compaction settings are neither visible nor changeable here** — they live in

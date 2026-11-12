@@ -26,7 +26,7 @@ import {
 	notebookBytes,
 	writeNotebook,
 } from './notebook.ts'
-import { NOTEBOOK_SOURCE_KIND } from './inject.ts'
+import { NOTEBOOK_SOURCE_KIND, REMINDER_SOURCE_KIND } from './inject.ts'
 
 /**
  * Model-facing name of the notebook tool.
@@ -132,49 +132,63 @@ function messageText(message: Record<string, unknown>): string | undefined {
 }
 
 /**
+ * The full, untruncated account of one log event.
+ *
+ * This is what a search matches against, so a phrase past the summary cap is
+ * still findable; a matching entry is rendered as a snippet around the hit
+ * rather than as the head of the body.
+ *
+ * @param event - one session log entry.
+ * @returns the body text, never truncated.
+ */
+function fullEventText(event: SessionEvent): string {
+	const data: unknown = event.data
+	if (!isRecord(data)) return ''
+	switch (event.type) {
+		// A `user/message` event carries the message itself; every other
+		// message-shaped event wraps it in `message` (`dsh-session`
+		// `lib/types/types.d.ts:300-389`). Rendering the wrapper for a
+		// `tool/result` used to yield an empty body, which made tool output
+		// invisible to both a range read and a search.
+		case 'user/message':
+			return messageText(data) ?? ''
+		case 'system/message':
+		case 'tool/result':
+		case 'assistant/message':
+			return wrappedMessageText(data) ?? ''
+		case 'developer/message':
+			return `turn ${String(data['turn'])} step ${String(data['step'])} ${wrappedMessageText(data) ?? ''}`
+		case 'tool/call':
+			return `${String(data['name'])} ${JSON.stringify(data['arguments'] ?? null)}`
+		default:
+			return JSON.stringify(data)
+	}
+}
+
+/**
+ * Extract the text of an event whose payload wraps its message in `message`.
+ *
+ * @param data - the event payload.
+ * @returns the concatenated text blocks, or `undefined` when there are none.
+ */
+function wrappedMessageText(data: Record<string, unknown>): string | undefined {
+	const message = data['message']
+	return isRecord(message) ? messageText(message) : undefined
+}
+
+/**
  * Build a compact, one-line-ish account of one log event for the model.
  *
  * The projection is lossy by design — {@link CONTEXT_HISTORY_TOOL} exists so the
- * model can pull any exact range it still needs, and `raw: true` returns the
- * original JSON for a single call.
+ * model can pull any exact range it still needs, `raw: true` returns the original
+ * JSON for a single call, and a search returns a snippet around the hit.
  *
  * @param event - one session log entry.
  * @param cfg - resolved configuration supplying the cap and marker.
  * @returns the summary string.
  */
 function summarizeEvent(event: SessionEvent, cfg: Config): string {
-	const data: unknown = event.data
-	if (!isRecord(data)) return ''
-	switch (event.type) {
-		case 'user/message':
-		case 'system/message':
-		case 'tool/result': {
-			const text = messageText(data)
-			return text === undefined ? '' : truncateSummary(text, cfg)
-		}
-		case 'assistant/message': {
-			const message = data['message']
-			const text = isRecord(message) ? messageText(message) : undefined
-			return text === undefined ? '' : truncateSummary(text, cfg)
-		}
-		case 'developer/message': {
-			const message = data['message']
-			const text = isRecord(message) ? messageText(message) : undefined
-			const account = text === undefined ? '' : truncateSummary(text, cfg)
-			return truncateSummary(`turn ${String(data['turn'])} step ${String(data['step'])} ${account}`, cfg)
-		}
-		case 'tool/call':
-			return truncateSummary(`${String(data['name'])} ${JSON.stringify(data['arguments'] ?? null)}`, cfg)
-		case 'turn/start':
-		case 'turn/end':
-		case 'step/start':
-		case 'step/end':
-		case 'request/header':
-		case 'request/context':
-			return truncateSummary(JSON.stringify(data), cfg)
-		default:
-			return truncateSummary(JSON.stringify(data), cfg)
-	}
+	return truncateSummary(fullEventText(event), cfg)
 }
 
 /** One returned transcript entry with its stable sequence identity. */
@@ -197,6 +211,120 @@ export interface HistoryValue {
 	readonly total: number
 }
 
+/** Which events a read or search may return. */
+export type HistoryScope = 'all' | 'user' | 'assistant' | 'tool_call' | 'tool_result'
+
+/** The values {@link HistoryScope} accepts, in the order the tool advertises them. */
+const HISTORY_SCOPES = ['all', 'user', 'assistant', 'tool_call', 'tool_result'] as const satisfies readonly HistoryScope[]
+
+/** Longest accepted search pattern, in characters. */
+const MAX_QUERY_CHARS = 200
+
+/** Characters of context kept on each side of a snippet hit. */
+const SNIPPET_CONTEXT_CHARS = 60
+
+/** Hits rendered inside one entry's snippet before it stops widening. */
+const SNIPPET_MAX_WINDOWS = 3
+
+/**
+ * The scope one event belongs to.
+ *
+ * The plugin's own notebook and reminder messages are user-shaped but are not
+ * user input: they are excluded from `user` so "what did the user say" cannot
+ * match the model's own notes, and stay reachable through `all`.
+ *
+ * @param event - one session log entry.
+ * @returns its scope, or `other` for events no scope names.
+ */
+function scopeOfEvent(event: SessionEvent): Exclude<HistoryScope, 'all'> | 'other' {
+	switch (event.type) {
+		case 'tool/call':
+			return 'tool_call'
+		case 'tool/result':
+			return 'tool_result'
+		case 'assistant/message':
+			return 'assistant'
+		case 'user/message': {
+			const data: unknown = event.data
+			const source = isRecord(data) && isRecord(data['source']) ? data['source'] : undefined
+			const kind = source === undefined ? undefined : source['kind']
+			if (kind === NOTEBOOK_SOURCE_KIND || kind === REMINDER_SOURCE_KIND) return 'other'
+			return 'user'
+		}
+		default:
+			return 'other'
+	}
+}
+
+/** The body text a read renders and a search matches. */
+function bodyOf(event: SessionEvent, raw: boolean): string {
+	if (!raw) return fullEventText(event)
+	const data: unknown = event.data
+	const json = JSON.stringify(data)
+	return json === undefined ? '' : json
+}
+
+/**
+ * Build the matcher for one search.
+ *
+ * Literal text only, escaped into a regular expression so `matchAll` can report
+ * positions. A model-authored pattern is NOT compiled as written: this runs
+ * synchronously over every event body, including tool output that untrusted
+ * content controls, and a backtracking pattern like `(a+)+$` takes minutes on a
+ * few dozen characters — one call would hang the host with no way to cancel it.
+ *
+ * @param query - the text to find, as the model wrote it.
+ * @param caseSensitive - whether matching is case-sensitive.
+ * @returns a global regex usable with `matchAll` and `search`.
+ * @throws when the query is too long to be a search term.
+ */
+function buildMatcher(query: string, caseSensitive: boolean): RegExp {
+	if (query.length > MAX_QUERY_CHARS) {
+		throw new Error(`${CONTEXT_HISTORY_TOOL}: query must be at most ${String(MAX_QUERY_CHARS)} characters`)
+	}
+	return new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), caseSensitive ? 'g' : 'gi')
+}
+
+/**
+ * Render the windows around the first few hits in one body.
+ *
+ * A match past the summary cap would otherwise be invisible: the model would see
+ * an entry reported as a hit and a summary that does not contain the phrase. The
+ * windows carry the hit itself, bounded by {@link SNIPPET_MAX_WINDOWS} so one
+ * chatty entry cannot consume the whole byte budget.
+ *
+ * @param text - the body the matcher was tested against.
+ * @param matcher - a global regex, as {@link buildMatcher} returns.
+ * @returns the snippet, or `undefined` when nothing matched.
+ */
+function snippetFor(text: string, matcher: RegExp): string | undefined {
+	const parts: string[] = []
+	for (const match of text.matchAll(matcher)) {
+		const index = match.index ?? 0
+		const start = Math.max(0, index - SNIPPET_CONTEXT_CHARS)
+		const end = Math.min(text.length, index + match[0].length + SNIPPET_CONTEXT_CHARS)
+		parts.push(`${start > 0 ? '…' : ''}${text.slice(start, end)}${end < text.length ? '…' : ''}`)
+		if (parts.length >= SNIPPET_MAX_WINDOWS) break
+	}
+	return parts.length === 0 ? undefined : parts.join(' … ')
+}
+
+/** One read or search request against the session log. */
+export interface HistoryReadOptions {
+	/** Inclusive lower bound; defaults to the start of the log. */
+	readonly from?: number
+	/** Inclusive upper bound; defaults to the newest event. */
+	readonly to?: number
+	/** Emit raw event JSON instead of compact summaries. */
+	readonly raw?: boolean
+	/** Text to search for; omitted or empty means "read the range" instead. */
+	readonly query?: string
+	/** Match case-sensitively. Defaults to false. */
+	readonly caseSensitive?: boolean
+	/** Restrict which events may be returned. Defaults to `all`. */
+	readonly scope?: HistoryScope
+}
+
 /** Internal transcript projection, before it is split into entries. */
 interface HistoryTranscript {
 	/** One rendered line per returned event, in ascending sequence order. */
@@ -208,13 +336,13 @@ interface HistoryTranscript {
 }
 
 /**
- * Assemble the rendered transcript.
+ * Assemble the rendered transcript, optionally filtered to search hits.
  *
  * Selection keeps the NEWEST events: with no explicit range a bounded sliding
  * window over the newest `historyDefaultLimit` events is taken, and with an
  * explicit range the newest `maxHistoryEntries` within that range are taken.
  * Either way the oldest events are the ones dropped, so a limit never hides
- * recent work.
+ * recent work. The same ceiling applies to search results, oldest dropped first.
  *
  * Rendering then walks NEWEST to OLDEST, so the UTF-8 byte budget
  * (`maxHistoryBytes`) also cuts the tail last. An entry that would exceed the
@@ -223,36 +351,55 @@ interface HistoryTranscript {
  * sequence order for readability.
  *
  * @param session - the live session to read.
- * @param from - inclusive lower bound, or `undefined` for the log start.
- * @param to - inclusive upper bound, or `undefined` for the current end.
- * @param raw - whether to emit raw JSON instead of summaries.
+ * @param options - range, projection, search pattern, and scope.
  * @param cfg - resolved configuration supplying every limit.
  * @param signal - caller-owned cancellation.
  * @returns the rendered transcript.
  */
-function readHistory(
+export function readHistory(
 	session: Session,
-	from: number | undefined,
-	to: number | undefined,
-	raw: boolean,
+	options: HistoryReadOptions,
 	cfg: Config,
 	signal: AbortSignal,
 ): HistoryTranscript {
 	const events = session.snapshotEvents()
 	const total = events.length
-	const lower = from ?? 0
-	const upper = to ?? (total - 1)
+	const lower = options.from ?? 0
+	const upper = options.to ?? (total - 1)
+	if (lower > upper) {
+		throw new Error(`${CONTEXT_HISTORY_TOOL}: from (${String(lower)}) must not exceed to (${String(upper)})`)
+	}
+	const raw = options.raw === true
+	const scope = options.scope ?? 'all'
+	if (!HISTORY_SCOPES.includes(scope)) {
+		throw new Error(`${CONTEXT_HISTORY_TOOL}: scope must be one of ${HISTORY_SCOPES.join(', ')}`)
+	}
+	// An empty query is a caller saying "no filter", not a pattern that matches
+	// every position.
+	const query = options.query === undefined || options.query.length === 0 ? undefined : options.query
+	if (query !== undefined && raw) {
+		throw new Error(`${CONTEXT_HISTORY_TOOL}: query cannot be combined with raw; search the summaries or read a range raw`)
+	}
+	const matcher = query === undefined ? undefined : buildMatcher(query, options.caseSensitive === true)
 	// With an explicit range the caller asked for exactly that window, so the
 	// ceiling is the hard cap only. With no range the caller wants "recent
 	// history", so a bounded sliding window over the newest events applies —
 	// this is what `historyDefaultLimit` configures.
-	const callerBounded = from !== undefined || to !== undefined
-	const ceiling = callerBounded ? cfg.maxHistoryEntries.get() : Math.min(cfg.historyDefaultLimit.get(), cfg.maxHistoryEntries.get())
+	const callerBounded = options.from !== undefined || options.to !== undefined
+	const ceiling = callerBounded
+		? cfg.maxHistoryEntries.get()
+		: Math.min(cfg.historyDefaultLimit.get(), cfg.maxHistoryEntries.get())
 	const byteBudget = cfg.maxHistoryBytes.get()
 	const selected: SessionEvent[] = []
+	/** Events that passed every filter, before the entry ceiling. */
+	let matched = 0
 	for (const event of events) {
 		const seq = Number(event.seq)
 		if (seq < lower || seq > upper) continue
+		if (scope !== 'all' && scopeOfEvent(event) !== scope) continue
+		// `search` ignores `lastIndex`, unlike `test` on a global regex.
+		if (matcher !== undefined && bodyOf(event, raw).search(matcher) < 0) continue
+		matched += 1
 		if (selected.length >= ceiling) selected.shift()
 		selected.push(event)
 	}
@@ -265,18 +412,29 @@ function readHistory(
 		if (event === undefined) continue
 		const seq = Number(event.seq)
 		const boundary = isBoundaryEvent(event) ? ` ${cfg.historyBoundaryMarker.get()}` : ''
-		const body = raw ? JSON.stringify(event.data) : summarizeEvent(event, cfg)
-		const line = `#${seq} ${event.type}${boundary}\n${body}`
+		const body = bodyOf(event, raw)
+		const rendered =
+			matcher === undefined ? truncateSummary(body, cfg) : (snippetFor(body, matcher) ?? truncateSummary(body, cfg))
+		const line = `#${seq} ${event.type}${boundary}\n${rendered}`
 		const lineBytes = notebookBytes(line)
 		if (reversedSeqs.length > 0 && bytes + lineBytes > byteBudget) break
 		reversed.push(line)
 		reversedSeqs.push(seq)
 		bytes += lineBytes
 	}
-	if (reversedSeqs.length === 0) return { lines: [], text: '', total }
-	const newestSeq = reversedSeqs[0] as number
-	const oldestSeq = reversedSeqs[reversedSeqs.length - 1] as number
-	const header = `session ${String(session.id)} · entries #${oldestSeq}-#${newestSeq} of ${total} events\n\n`
+	const span =
+		reversedSeqs.length === 0
+			? `no entries shown of ${String(total)} events`
+			: `entries #${String(reversedSeqs[reversedSeqs.length - 1] as number)}-#${String(reversedSeqs[0] as number)} of ${String(total)} events`
+	// Report what was DROPPED, not just what came back: a limit that silently
+	// shortens a search result reads as "that is all there is".
+	const shown = reversedSeqs.length
+	const counted = query === undefined ? undefined : shown === matched ? `${String(matched)} matches` : `${String(shown)} of ${String(matched)} matches`
+	const header =
+		query === undefined
+			? `session ${String(session.id)} · ${span}\n\n`
+			: `session ${String(session.id)} · ${counted ?? ''} for "${query.length > 60 ? `${query.slice(0, 60)}…` : query}"${scope === 'all' ? '' : ` in ${scope}`}${shown < matched ? ' (oldest dropped by the entry ceiling and the byte budget; narrow the range)' : ''} · ${span}\n\n`
+	if (shown === 0) return { lines: [], text: '', total }
 	return { lines: reversed.reverse(), text: header + reversed.join('\n\n'), total }
 }
 
@@ -297,7 +455,7 @@ export function registerTools(ctx: Context, cfg: Config): boolean {
 		defineTool({
 			name: CONTEXT_NOTES_TOOL,
 			description:
-				'Read or replace your persistent notebook. The notebook is a durable, model-written record that survives context rollovers; it is replayed to you at the start of later context windows. Call with no `text` to read the current notebook, with `text` to replace it wholesale, or with an empty `text` to clear it. Keep it short and high-signal: it is a working state record, not a transcript.',
+				'Read or replace your persistent notebook. The notebook is a durable, model-written record that survives context rollovers: it is written into the checkpoint at each rollover, and this tool returns it whole at any time. Call with no `text` to read the current notebook, with `text` to replace it wholesale, or with an empty `text` to clear it. Keep it short and high-signal: it is a working state record, not a transcript.',
 			parameters: {
 				text: {
 					type: 'string',
@@ -350,7 +508,7 @@ export function registerTools(ctx: Context, cfg: Config): boolean {
 									? 'This revision is currently in your context.'
 									: value.materialized
 										? 'NOTE: this revision was dropped from your visible context by a rollover; the text below is read from the log and is authoritative.'
-										: 'This revision was accepted and is queued for delivery to you at the next step boundary (it is not in your context yet).',
+										: 'This revision has no message of its own in the conversation. It is written into the checkpoint at the next rollover, and this read is the authoritative copy.',
 								'',
 								value.text,
 							].join('\n'),
@@ -362,7 +520,7 @@ export function registerTools(ctx: Context, cfg: Config): boolean {
 			 * Reads may overlap; a write must not. Revision allocation is a
 			 * read-then-write (`(latestNotebook(session)?.revision ?? 0) + 1` in
 			 * `writeNotebook`), so two parallel writes would allocate the SAME
-			 * revision number and break revision-keyed re-publication. Only a call
+			 * revision number and break the `context_notes` read, which is revision-keyed. Only a call
 			 * with no `text` — a pure read — is parallel-safe.
 			 */
 			isConcurrencySafe: (args) => args.text === undefined,
@@ -381,12 +539,13 @@ export function registerTools(ctx: Context, cfg: Config): boolean {
 				const maxNotebookBytes = cfg.maxNotebookBytes.get()
 				if (exec.signal.aborted) throw new Error(`${CONTEXT_NOTES_TOOL} was cancelled`)
 				if (args.text !== undefined) {
-					// Validated, revision-allocated, and recorded — but deliberately NOT
-					// appended. Appending here would place this user/message on the
-					// surface BEFORE the tool result of this very call, and a provider
-					// rejects an assistant tool call that is not immediately followed by
-					// its result. `deferContext` rides the result instead and is drained
-					// only after that result is committed.
+					// Validated, revision-allocated, and recorded in the per-session
+					// registry — but NOT appended and NOT delivered. The notebook does not
+					// need a model-visible copy of its own: the call's `tool/call` argument
+					// already carries the text durably, the next rollover projects the
+					// notebook into its checkpoint, and `context_notes` reads it back on
+					// demand. Re-delivering it as a `user/message` would put the same text
+					// in the conversation a second time for no new information.
 					let written
 					try {
 						written = writeNotebook(session, args.text, { maxNotebookBytes })
@@ -396,7 +555,6 @@ export function registerTools(ctx: Context, cfg: Config): boolean {
 						if (error instanceof NotebookTooLargeError) markNotebookWriteRejected(session, args.text)
 						throw error
 					}
-					exec.deferContext(written.message)
 					return {
 						present: written.text.length > 0,
 						visible: false,
@@ -439,11 +597,26 @@ export function registerTools(ctx: Context, cfg: Config): boolean {
 		defineTool({
 			name: CONTEXT_HISTORY_TOOL,
 			description:
-				'Read this session\'s raw transcript back from the event log. Returns stable `seq` ids so you can re-read a precise range, and marks rollover/compaction boundaries. Use this whenever a summary, notebook entry, or your own recollection is not enough and you need what was actually said.',
+				'Read or search this session\'s raw transcript in the event log. Returns stable `seq` ids, marks rollover/compaction boundaries, and can narrow to one kind of event with `scope`. With `query` it returns the newest matches as snippets around the hit, so use that first when you are looking for a specific phrase, error text, path, or value; use `from`/`to` when you know where in the log to look. Use this whenever a summary, notebook entry, or your own recollection is not enough and you need what was actually said.',
 			parameters: {
 				from: { type: 'integer', description: 'Inclusive starting seq. Defaults to the start of the log.' },
 				to: { type: 'integer', description: 'Inclusive ending seq. Defaults to the newest event.' },
 				raw: { type: 'boolean', description: 'Return raw event JSON instead of compact summaries.' },
+				query: {
+					type: 'string',
+					description:
+						'Literal text to find (case-insensitive unless `caseSensitive`). Returns the newest matching events as snippets around the hit. Omit to read the range instead. Combine with `from`/`to` to search inside one span.',
+				},
+				caseSensitive: {
+					type: 'boolean',
+					description: 'Match case-sensitively. Default false.',
+				},
+				scope: {
+					type: 'string',
+					enum: [...HISTORY_SCOPES],
+					description:
+						'Restrict results to one kind of event: `user` (what the user said), `assistant` (what you said), `tool_call` (tool invocations and their arguments), `tool_result` (tool output), or `all`. Default `all`. Your own notebook and reminder messages are not `user` events viewable here — read them with context_notes.',
+				},
 			},
 			output: {
 				schema: {
@@ -476,7 +649,19 @@ export function registerTools(ctx: Context, cfg: Config): boolean {
 				if (args.from !== undefined && args.to !== undefined && args.from > args.to) {
 					throw new Error(`context_history: from (${String(args.from)}) must not exceed to (${String(args.to)})`)
 				}
-				const transcript = readHistory(session, args.from, args.to, args.raw === true, cfg, run.signal)
+				const transcript = readHistory(
+					session,
+					{
+						...(args.from === undefined ? {} : { from: args.from }),
+						...(args.to === undefined ? {} : { to: args.to }),
+						...(args.raw === undefined ? {} : { raw: args.raw }),
+						...(args.query === undefined ? {} : { query: args.query }),
+						...(args.caseSensitive === undefined ? {} : { caseSensitive: args.caseSensitive }),
+						...(args.scope === undefined ? {} : { scope: args.scope }),
+					},
+					cfg,
+					run.signal,
+				)
 				const entries: HistoryEntry[] = []
 				for (const line of transcript.lines) {
 					const newline = line.indexOf('\n')

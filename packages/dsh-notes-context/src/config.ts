@@ -65,11 +65,18 @@ const DEFAULT_MAX_NOTEBOOK_BYTES = 16384
 /**
  * Default character cap for a static summary body.
  *
- * Independent of {@link DEFAULT_MAX_NOTEBOOK_BYTES}: this is a character count
- * for a different consumer, chosen low enough that a fully multi-byte notebook
- * is still truncated by a bound that reads sensibly as a character count.
+ * A character count for a different consumer than {@link DEFAULT_MAX_NOTEBOOK_BYTES},
+ * but set to the same number: the byte bound admits at most 16,384 characters, so a
+ * cap of 16,384 characters can never truncate a notebook the writer accepted. The
+ * projection in the checkpoint is therefore the whole notebook — it costs a few
+ * thousand tokens against a shadowed span measured in hundreds of thousands, and a
+ * truncated copy would only be a second, lossier copy of text the model may still
+ * need after the boundary.
+ *
+ * The cap keeps its job as a guard: a profile may lower it, and a notebook sitting
+ * exactly at the byte bound is the worst case for the parent's shrink guard.
  */
-const DEFAULT_NOTEBOOK_SUMMARY_MAX_CHARS = 2048
+const DEFAULT_NOTEBOOK_SUMMARY_MAX_CHARS = DEFAULT_MAX_NOTEBOOK_BYTES
 
 /** `thresholdTokens: -1` — unset, so the rollover point follows the ratio instead. */
 export const THRESHOLD_TOKENS_UNSET = -1

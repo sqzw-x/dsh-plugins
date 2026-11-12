@@ -52,15 +52,17 @@ and the run must be preceded by `npx tsdown`.
 ## What a passing run looks like
 
 1. `npx tsc --noEmit` → no output, exit 0.
-2. `npm test` → 18/18.
+2. `npm test` → 40/40.
 3. The request dump shows each `assistant` tool-call immediately followed by its
-   `tool` result, with the notebook-sourced `user` message **after** them.
+   `tool` result, with **nothing** between them: a write produces no message of
+   its own, and the notebook travels in the checkpoint at the next rollover.
 4. Zero `INVALID_REQUEST` in stderr.
 5. The durable log shows `compaction/summary` events with
    `provider: "dsh-notes-context"`, `model: "static-rollover"`, and **no**
    `llmStreamCall` and **no** `usage` — that absence is the zero-LLM claim.
 6. A fresh session's first notebook write reports `Notebook revision 1`.
-7. `context_history` returns the whole raw transcript including shadowed events.
+7. `context_history` returns the whole raw transcript including shadowed events;
+   `{ query: ... }` finds a phrase inside one, with the hit visible in the snippet.
 
 Session logs live at
 `$DSH_HOME/sessions/--<escaped-cwd>--/<sessionId>/session.v4.jsonl.zstd`

@@ -1,23 +1,22 @@
 /**
- * The per-window rollover reminder, and the notebook-visibility repair.
+ * The per-window rollover reminder.
  *
- * ## One listener, two bounded jobs
+ * ## One listener, one job
  *
- * 1. **Reminder.** When measured pressure enters the configured band
- *    `[threshold - lead, threshold)`, tell the model once — and only once per
- *    context window — to bring its persistent notebook up to date before the
- *    boundary. The band is disjoint from the parent's own trigger, which fires
- *    at or above `threshold` (`dsh-compaction-basic/lib/index.js:941`), so a
- *    reminder and a rollover can never describe the same step.
- * 2. **Repair.** A notebook revision is a `user/message`, which makes it a
- *    surface node; a rollover can therefore *shadow* it, leaving it readable in
- *    the log but invisible to the model exactly across the boundary it was
- *    written for. When the newest revision is off the surface, it is delivered
- *    again, once per revision.
+ * When measured pressure enters the configured band `[threshold - lead,
+ * threshold)`, tell the model once — and only once per context window — to bring
+ * its persistent notebook up to date before the boundary. The band is disjoint
+ * from the parent's own trigger, which fires at or above `threshold`
+ * (`dsh-compaction-basic/lib/index.js:941`), so a reminder and a rollover can
+ * never describe the same step.
  *
- * Nothing else is injected. In particular there is no "refresh the notebook"
- * path: while a revision is visible the model already has it as an ordinary
- * message, and re-sending it would deliver the same text twice.
+ * Nothing else is injected. In particular there is no post-rollover repair of the
+ * notebook message: the checkpoint that lands on the boundary carries the whole
+ * notebook (`notebookSummaryMaxChars` defaults to the notebook's own bound), so a
+ * revision the rollover shadowed is still in front of the model. Re-delivering it
+ * as a message too would put the same text twice in one request. What a shadowed
+ * revision loses is its standalone message, and `context_notes` still returns it
+ * whole.
  *
  * ## Why delivery goes through the returned decision
  *
@@ -33,7 +32,7 @@
  * (`dsh-agent-loop/lib/index.js:962-966`): a decision with no messages ends the
  * turn, so a listener that appends unconditionally manufactures a step — and
  * keeps manufacturing them, one per reminder — instead of letting the agent go
- * idle. Both injections here are therefore gated on the loop having decided to
+ * idle. The injection here is therefore gated on the loop having decided to
  * enter the step for its own reasons, which makes them incapable of changing
  * any turn's outcome.
  *
@@ -42,7 +41,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { SessionSeq as toSessionSeq } from '@deepseek-ai/dsh-session'
-import type { UserMessage } from '@deepseek-ai/dsh-llm'
 /* Type-only, erased at build time: loads `dsh-token-meter`'s `Context`
  * augmentation so `ctx.tokenMeter` is typed. The runtime service is supplied by
  * whatever mounts the meter. */
@@ -50,8 +48,7 @@ import type {} from '@deepseek-ai/dsh-token-meter'
 import { resolveReminderBand, type Config as NotesLiveConfig } from './config.ts'
 import { asPressurePolicySource, readPressurePolicy, resolveThresholdTokens } from './engine.ts'
 import type { PressurePolicySource } from './engine.ts'
-import { notebookMessage, reminderMessage } from './inject.ts'
-import { latestNotebook } from './notebook.ts'
+import { reminderMessage } from './inject.ts'
 import { CONTEXT_NOTES_TOOL } from './tools.ts'
 
 /**
@@ -64,11 +61,11 @@ import { CONTEXT_NOTES_TOOL } from './tools.ts'
  * interpolated from its single definition so a rename cannot strand this copy.
  */
 const REMINDER_TEXT = `<context-window-reminder>
-The current context window is nearing its rollover threshold. Before important details fall out of the live tail, use ${CONTEXT_NOTES_TOOL} to save a concise durable notebook: current task state, decisions, changed files, evidence, blockers, and exact next steps. Keep the notebook a compact index with one line per item, no copied logs or file bodies, and replace stale entries instead of appending so it stays well under the configured cap. Do not request a new window until the notebook is current.
+The current context window is nearing its rollover threshold. Before important details fall out of the live tail, use ${CONTEXT_NOTES_TOOL} to save a concise durable notebook: current task state, decisions, changed files, evidence, blockers, and exact next steps. Keep the notebook a compact index with one line per item, no copied logs or file bodies, and replace stale entries instead of appending so it stays well under the configured cap.
 </context-window-reminder>`
 
 /**
- * Per-session bookkeeping for both jobs.
+ * Per-session bookkeeping for the reminder.
  *
  * Held in a `WeakMap` owned by one {@link registerNotesReminder} call — never a
  * module global — so two mounted contexts (or a reload) cannot share or leak
@@ -83,8 +80,6 @@ interface ReminderState {
 	compacting: boolean
 	/** Boundary the reminder was delivered for; `undefined` means never delivered. */
 	remindedBoundary: number | undefined
-	/** Notebook revision most recently re-published; `undefined` means never. */
-	republishedRevision: number | undefined
 	/** Route-and-window key the cached threshold belongs to. */
 	thresholdKey: string | undefined
 	/** Rollover threshold cached for {@link thresholdKey}, when it resolved. */
@@ -98,7 +93,6 @@ function newState(): ReminderState {
 		boundary: -1,
 		compacting: false,
 		remindedBoundary: undefined,
-		republishedRevision: undefined,
 		thresholdKey: undefined,
 		thresholdTokens: undefined,
 	}
@@ -137,59 +131,6 @@ function recoverBoundary(session: Session, state: ReminderState): void {
 			return
 		}
 	}
-}
-
-/** The notebook text and revision to deliver again, when a repair is due. */
-interface RepublishPlan {
-	/** The stored notebook text, exactly as the model wrote it. */
-	readonly text: string
-	/** The revision being re-delivered. */
-	readonly revision: number
-}
-
-/**
- * Decide whether the newest notebook revision needs re-delivering.
- *
- * ## The three states a revision can be in
- *
- * - **pending** — queued for delivery into a later step (the write path defers
- *   it so a notebook never lands between an assistant tool call and its tool
- *   result, which providers reject). It has no durable event yet.
- * - **visible** — materialized as a `user/message` and still on the surface.
- * - **shadowed** — materialized, then dropped from the surface by a rollover.
- *
- * Only **shadowed** is this function's business. A visible revision is already
- * in front of the model, and a pending one is already on its way: re-injecting
- * either would deliver the same text twice. The test is therefore positive — the
- * revision must have reached the log *and* be off the surface — never merely
- * "not visible", which `materialized: false` also satisfies.
- *
- * The `seq` assertion after `materialized` is belt-and-braces rather than a
- * restatement: `materialized` is the contract, and a durable event to repair is
- * the precondition this function actually needs. If the two flags ever
- * disagreed, declining to repair is the safe direction — a missing repair is
- * recoverable on a later step, whereas a double delivery is not.
- *
- * Synchronous and pure apart from reading the session, so it can be planned
- * before the rest of the waterfall runs.
- *
- * @param session - the live session.
- * @param state - the session's record.
- * @param config - resolved plugin configuration.
- * @returns the plan, or `undefined` when nothing is due.
- */
-function planRepublish(session: Session, state: ReminderState, config: NotesLiveConfig): RepublishPlan | undefined {
-	if (!config.enabled.get()) return undefined
-	const notebook = latestNotebook(session)
-	if (notebook === undefined) return undefined
-	/* Pending delivery: the next-step inbox already carries it. */
-	if (!notebook.materialized) return undefined
-	/* In context: the model is already looking at it. */
-	if (notebook.visible) return undefined
-	/* No durable event to repair — decline rather than risk a double delivery. */
-	if (notebook.seq === undefined) return undefined
-	if (state.republishedRevision === notebook.revision) return undefined
-	return { text: notebook.text, revision: notebook.revision }
 }
 
 /**
@@ -329,18 +270,17 @@ function mountedPolicySource(ctx: Context): PressurePolicySource | undefined {
 }
 
 /**
- * Install the reminder and the notebook-visibility repair.
+ * Install the rollover reminder.
  *
  * One `agent/pre-step` listener, registered with `{ prepend: true }` so it runs
  * before the compaction backend's pressure listener (`prepend` is an `unshift`
  * into a single hook list and waterfall listeners run front-to-back —
  * `cordis/lib/index.js:336`, `:317-327`). Its own reads therefore complete
- * before `compactIfNeeded` runs inside `next()`, and its injections are added to
+ * before `compactIfNeeded` runs inside `next()`, and its injection is added to
  * the decision the rest of the chain produced.
  *
- * Both jobs are planned before `next()` and delivered after it, each in its own
- * `try`/`catch`, so a failure in one cannot suppress the other and neither can
- * abort a turn.
+ * The decision is planned before `next()` and delivered after it, inside its own
+ * `try`/`catch`, so a failure to measure pressure cannot abort a turn.
  *
  * @param ctx - the plugin context; the listener is disposed with it.
  * @param config - resolved plugin configuration.
@@ -385,13 +325,6 @@ export function registerNotesReminder(ctx: Context, config: NotesLiveConfig): vo
 			const session = agent.session
 			const state = stateOf(session)
 
-			let republish: RepublishPlan | undefined
-			try {
-				republish = planRepublish(session, state, config)
-			} catch (error) {
-				ctx.logger.warn('notes-context: notebook re-publication check failed: %o', error)
-			}
-
 			let reminderBoundary: number | undefined
 			try {
 				reminderBoundary = signal.aborted
@@ -408,17 +341,9 @@ export function registerNotesReminder(ctx: Context, config: NotesLiveConfig): vo
 			 * turn and how it declines to open one (`dsh-agent-loop:962-966`). */
 			if (decision.messages.length === 0) return decision
 
-			const added: UserMessage[] = []
-			if (reminderBoundary !== undefined) {
-				added.push(reminderMessage(REMINDER_TEXT))
-				state.remindedBoundary = reminderBoundary
-			}
-			if (republish !== undefined) {
-				added.push(notebookMessage(republish.text, { revision: republish.revision }))
-				state.republishedRevision = republish.revision
-			}
-			if (added.length === 0) return decision
-			return { ...decision, messages: [...decision.messages, ...added] }
+			if (reminderBoundary === undefined) return decision
+			state.remindedBoundary = reminderBoundary
+			return { ...decision, messages: [...decision.messages, reminderMessage(REMINDER_TEXT)] }
 		},
 		{ prepend: true },
 	)

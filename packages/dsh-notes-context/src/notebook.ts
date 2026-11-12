@@ -31,29 +31,31 @@
  * rejects only a missing/non-string `kind` or the retired literal `'plugin'`
  * (`dsh-session-format-v3-to-v4/lib/index.js:124-127`).
  *
- * ## Why the write path does NOT append, and why a registry exists
+ * ## Why a write appends nothing, and why a registry exists
  *
- * A tool body must not append its own model-visible message. Calling
- * `session.append('user/message', …)` from inside `execute` lands the message on
- * the surface BEFORE the tool result of the very call that produced it:
- * `executeToolCalls` appends results only after a whole group settles
- * (`dsh-agent-loop/lib/index.js:506-533`), so the surface became
- * `assistant(tool-call) → notebook → tool(result)`. That sequence is illegal and
- * a real provider rejects the request with HTTP 400 `invalid_request_error`.
+ * A notebook write produces no conversation event of its own.
  *
- * The ordering-correct channel is `exec.deferContext(message)`
- * (`dsh-tools/lib/types/index.d.ts:306-312`), which rides the tool result as
- * `additionalContexts` and is drained AFTER the result is appended:
- * `appendToolResult(...)` then `for (const context of result.additionalContexts ?? []) acceptContext(context)`
- * (`dsh-agent-loop/lib/index.js:570-573`). The loop's acceptor stages it in the
- * durable `next-step` inbox (`:1154`; `Inbox.splice` → `agent/inbox/spliced`,
- * `:159-177`), and the next `preStep` claims it (`:906`), so it materializes as
- * a `user/message` at the next step boundary (`:1061`).
+ * Appending one from inside `execute` is illegal: `executeToolCalls` appends
+ * results only after a whole group settles (`dsh-agent-loop/lib/index.js:506-533`),
+ * so the surface would read `assistant(tool-call) → notebook → tool(result)` and a
+ * provider rejects that with HTTP 400 `invalid_request_error`. The ordering the
+ * loop does allow is `exec.deferContext(message)`
+ * (`dsh-tools/lib/types/index.d.ts:306-312`), drained after the result is appended
+ * (`:570-573`) — but that still delivers a second copy of text the model has just
+ * written, and every step boundary would carry it. This plugin does not use it.
  *
- * Between the `context_notes` call and that materialization the newest revision
- * exists only in memory, which is why this module keeps a per-session registry.
- * The registry is a front for the log, never a replacement: a resumed session
- * has the materialized `user/message` and is served entirely by the log scan.
+ * The durable record of a write is the call itself: the `tool/call` event carries
+ * the whole text as its argument, and the `tool/result` records the revision that
+ * was accepted. A rollover projects the notebook into its checkpoint from
+ * whichever of those the log offers, and `context_notes` reads the newest revision
+ * back whole at any time. Because a rejected write is still in the log as a
+ * request, the scan pairs each request with its result: a failed result voids the
+ * request with the same call id ({@link scanLog}).
+ *
+ * The per-session registry covers the window in which the log says nothing about
+ * the write yet — a revision is readable the moment the tool returns. It is a
+ * front for the log, never a replacement: a resumed session is served entirely by
+ * the log scan.
  *
  * @module dsh-notes-context/notebook
  */
@@ -109,15 +111,18 @@ export class NotebookTooLargeError extends Error {
  * The authoritative state of the persistent notebook.
  *
  * `visible` reports whether the revision is on the model-visible surface right
- * now. When it is false, {@link materialized} says which of two very different
- * situations applies:
+ * now, which only a `user/message` can be. {@link materialized} says whether such
+ * a message exists at all:
  *
- * - `materialized: false` — the revision is awaiting delivery at the next step
- *   boundary; its `user/message` has not reached the log yet, so `seq` is
- *   `undefined`. Nothing is wrong and a repair must NOT re-publish it.
- * - `materialized: true` — the revision reached the log but a rollover SHADOWED
- *   it, so it stays readable while dropping out of context. This is the
- *   condition a repair must act on, and re-publishing is the correct response.
+ * - `materialized: false` — the newest revision is known from the call's own
+ *   record (its `tool/call` argument, validated against the result) or from this
+ *   process's registry. No message exists, so nothing can be visible and nothing
+ *   is wrong: the notebook reaches the model through the checkpoint and through
+ *   `context_notes`.
+ * - `materialized: true` — a message does exist. Sessions written by an earlier
+ *   version contain one, and a rollover can SHADOW it, leaving it readable in the
+ *   log while it drops out of context. The checkpoint carries the notebook in
+ *   full either way, and `context_notes` returns it whole.
  */
 export interface NotebookState {
 	/** The notebook text exactly as written. */
@@ -164,8 +169,8 @@ interface SessionNotebookState {
 	 * answers while changing NEITHER the log (`writeNotebook` does not append) NOR
 	 * the surface, so it is the only signal that can invalidate the memo for that
 	 * window. Without it a write would serve the previous revision until its
-	 * message materialized, corrupting both the rollover projection and the
-	 * repair guard.
+	 * message materialized, corrupting both the rollover projection and every
+	 * reader's `visible` answer.
 	 */
 	version: number
 	/** The newest revision written in this process, if any. */
@@ -248,6 +253,48 @@ function recordFromEvent(event: SessionEvent): NotebookRecord | undefined {
 	return isRecord(data) ? recordFromMessage(data) : undefined
 }
 
+/**
+ * The call id a FAILED `tool/result` answers, when the result failed.
+ *
+ * A rejected write never gets a revision account, so nothing else in the log marks
+ * it as rejected — but the text it attempted is still in the log as the paired
+ * `tool/call` argument. Pairing the two is what keeps a refused write from coming
+ * back as the current notebook after a restart.
+ *
+ * @param event - one session log entry.
+ * @returns the answered call id, or `undefined` for anything but a failed result.
+ */
+function rejectedCallId(event: SessionEvent): string | undefined {
+	if (event.type !== 'tool/result') return undefined
+	const data: unknown = event.data
+	if (!isRecord(data)) return undefined
+	const message = data['message']
+	if (!isRecord(message)) return undefined
+	if (message['isError'] !== true) return undefined
+	const callId = message['toolCallId']
+	return typeof callId === 'string' ? callId : undefined
+}
+
+/** The call id one `tool/result` event answers. */
+function resultCallId(event: SessionEvent): string | undefined {
+	if (event.type !== 'tool/result') return undefined
+	const data: unknown = event.data
+	if (!isRecord(data)) return undefined
+	const message = data['message']
+	if (!isRecord(message)) return undefined
+	const callId = message['toolCallId']
+	return typeof callId === 'string' ? callId : undefined
+}
+
+/** The call id one `tool/call` event answers. */
+function callIdOf(event: SessionEvent): string | undefined {
+	if (event.type !== 'tool/call') return undefined
+	const data: unknown = event.data
+	if (!isRecord(data)) return undefined
+	const callId = data['callId']
+	return typeof callId === 'string' ? callId : undefined
+}
+
 /** A revision recovered from the log, plus whether it has been delivered yet. */
 interface LogRecord extends NotebookRecord {
 	/** Seq of the event the revision was recovered from. */
@@ -296,15 +343,15 @@ function inboxAt(session: Session, event: SessionEvent): UserMessage[] {
 /**
  * Scan the raw log newest-to-oldest for the newest notebook revision.
  *
- * Both durable shapes are recognized, because a revision reaches the log twice
- * on its way to the model:
+ * Three durable shapes are recognized:
  *
- * - a delivered `user/message` carrying our source kind;
- * - an `agent/inbox/spliced` event whose `inserted[]` carries our message — the
- *   deferred context staged by `Inbox.splice` before the next step boundary. The
- *   complete `UserMessage`, `source.kind` and `revision` included, is inside that
- *   core event, which is why a revision that is never delivered is still
- *   recoverable after a resume (the in-memory registry does not survive one).
+ * - a delivered `user/message` carrying our source kind — written by earlier
+ *   versions, which delivered the notebook as a message;
+ * - an `agent/inbox/spliced` event whose `inserted[]` carries such a message;
+ * - the pair a write leaves today: a `tool/call` with the text as its argument
+ *   and a `tool/result` carrying the revision account. These are matched by call
+ *   id, so a refused write (a failed result) never counts and a quoted account
+ *   from some other tool never does either.
  *
  * A spliced match counts only if it is still pending when the scan reaches it:
  * the inbox fold is replayed deterministically through that event's own seq, and
@@ -333,10 +380,17 @@ function inboxAt(session: Session, event: SessionEvent): UserMessage[] {
 function scanLog(session: Session): LogRecord | undefined {
 	/** The newest revision from an authoritative arm, if any. */
 	let authoritative: LogRecord | undefined
-	/** The newest accepted-write revision recorded by a tool result. */
-	let accepted: { revision: number; seq: SessionSeq } | undefined
+	/**
+	 * The newest revision ACCOUNT seen in a tool result, not yet known to be this
+	 * plugin's: any tool output can quote `Notebook revision N — …` (a
+	 * `context_history` read of an earlier result does exactly that), so an
+	 * account only counts once the call it answers is found to be `context_notes`.
+	 */
+	let accepted: { revision: number; seq: SessionSeq; callId: string | undefined; validated: boolean } | undefined
 	/** The newest requested write, whether or not it was ever accepted. */
-	let requested: { text: string; seq: SessionSeq } | undefined
+	let requested: { text: string; seq: SessionSeq; callId: string | undefined } | undefined
+	/** Calls whose result failed, so their arguments describe a write that was refused. */
+	const rejected = new Set<string>()
 	for (let index = session.seq - 1; index >= 0; index -= 1) {
 		const event = session.eventAt(toSessionSeq(index))
 		if (event === undefined) {
@@ -361,13 +415,27 @@ function scanLog(session: Session): LogRecord | undefined {
 			}
 			continue
 		}
+		const failed = rejectedCallId(event)
+		if (failed !== undefined) rejected.add(failed)
 		if (accepted === undefined) {
 			const revision = revisionFromToolResult(event)
-			if (revision !== undefined) accepted = { revision, seq: event.seq }
+			if (revision !== undefined) accepted = { revision, seq: event.seq, callId: resultCallId(event), validated: false }
 		}
-		if (requested === undefined && event.type === 'tool/call') {
-			const text = recordFromToolCall(event)
-			if (text !== undefined) requested = { text, seq: event.seq }
+		if (event.type === 'tool/call') {
+			const callId = callIdOf(event)
+			// The call for a pending account is met later in this backward scan; it is
+			// what tells a real revision account from a quoted one.
+			if (accepted !== undefined && !accepted.validated && callId !== undefined && callId === accepted.callId) {
+				const data: unknown = event.data
+				const name = isRecord(data) ? data['name'] : undefined
+				if (name === CONTEXT_NOTES_TOOL_NAME) accepted.validated = true
+				else accepted = undefined
+			}
+			if (requested === undefined) {
+				if (callId !== undefined && rejected.has(callId)) continue
+				const text = recordFromToolCall(event)
+				if (text !== undefined) requested = { text, seq: event.seq, callId }
+			}
 		}
 	}
 
@@ -377,27 +445,35 @@ function scanLog(session: Session): LogRecord | undefined {
 	//   3. a `tool/result` carrying a `Notebook revision N` account — an accepted
 	//      write: authoritative revision, but the text is not in the result
 	//   4. a `tool/call` argument — the request only: authoritatively the text, but
-	//      NO trustworthy revision, and no proof the write was accepted.
+	//      NO trustworthy revision, and no proof the write was accepted. A request
+	//      whose paired result failed is skipped entirely: its text describes a
+	//      write the plugin refused.
 	//
 	// (4) is used when the newest thing in the log is a request with no accepted
 	// result after it, which is exactly the crash-inside-the-window case.
 	if (authoritative !== undefined) return authoritative
-	if (requested !== undefined && (accepted === undefined || requested.seq > accepted.seq)) {
-		const text = requested.text
-		return {
-			id: '',
-			text,
-			// Not an ordinal guess: this write IS the next revision after the newest
-			// accepted one. It is still flagged untrusted, and `writeNotebook` never
-			// lets an untrusted number feed allocation, so the flag stays honest.
-			revision: (accepted?.revision ?? 0) + 1,
-			bytes: notebookBytes(text),
-			seq: requested.seq,
-			materialized: false,
-			revisionTrusted: false,
-		}
+	if (requested === undefined) return undefined
+	// An account whose owning call was never seen (a malformed log, or a span that
+	// lost the call) is not evidence of anything.
+	if (accepted !== undefined && !accepted.validated) accepted = undefined
+	const base = {
+		id: '',
+		text: requested.text,
+		bytes: notebookBytes(requested.text),
+		seq: requested.seq,
+		materialized: false,
 	}
-	if (accepted === undefined) return undefined
+	// The request's own result carries this write's revision account: the text is
+	// durable in the argument and the revision is durable in the result, so the
+	// pair is the complete record and the revision is authoritative.
+	if (accepted !== undefined && accepted.callId === requested.callId) {
+		return { ...base, revision: accepted.revision, revisionTrusted: true }
+	}
+	// Otherwise the text is the only durable fact: report it with the successor
+	// revision, flagged untrusted. Returning nothing here would lose a notebook
+	// the log still holds, and `writeNotebook` never lets an untrusted number feed
+	// allocation, so the flag stays honest.
+	return { ...base, revision: (accepted?.revision ?? 0) + 1, revisionTrusted: false }
 	// An accepted write with nothing newer. Its revision is authoritative, but the
 	// RESULT does not carry the notebook text — that lived in the deferred message,
 	// which was discarded before delivery. Reporting a revision with empty content
@@ -410,21 +486,27 @@ function scanLog(session: Session): LogRecord | undefined {
 /**
  * The newest authoritative revision number, or `undefined` when none exists.
  *
- * Used for revision ALLOCATION, so it deliberately ignores the `tool/call`
- * recovery arm: the agent loop logs a `tool/call` for the write CURRENTLY being
- * served, and counting that would make the first write of every session report
- * revision 2 and inflate every write after it.
+ * Used for revision ALLOCATION, so it never takes a revision number from a
+ * `tool/call` argument: the agent loop logs a `tool/call` for the write CURRENTLY
+ * being served, and counting that would make the first write of every session
+ * report revision 2 and inflate every write after it.
+ *
+ * A `tool/result` account counts only once the call it answers is known to be
+ * `context_notes`: any tool output can quote `Notebook revision N — …`, and
+ * trusting a quoted number would allocate revisions that never existed.
  *
  * Three sources are merged: the newest revision recorded in the log (delivered
- * message, pending splice, or accepted `tool/result`), and the newest revision
- * this process allocated but has not delivered yet — which is in none of them,
- * because `writeNotebook` does not append.
+ * message, pending splice, or a validated `tool/result` account), and the newest
+ * revision this process allocated but has not delivered yet — which is in none of
+ * them, because `writeNotebook` does not append.
  *
  * @param session - the live session to read.
  * @returns the highest revision known to have been issued; the next is this + 1.
  */
 function trustedRevision(session: Session): number {
 	let log = 0
+	/** Unvalidated accounts, newest first, with the call each one answers. */
+	const accounts: { revision: number; callId: string | undefined }[] = []
 	for (let index = session.seq - 1; index >= 0; index -= 1) {
 		const event = session.eventAt(toSessionSeq(index))
 		if (event === undefined) break
@@ -448,10 +530,21 @@ function trustedRevision(session: Session): number {
 				break
 			}
 		}
-		const accepted = revisionFromToolResult(event)
-		if (accepted !== undefined) {
-			log = Math.max(log, accepted)
-			break
+		const account = revisionFromToolResult(event)
+		if (account !== undefined) accounts.push({ revision: account, callId: resultCallId(event) })
+		if (event.type === 'tool/call') {
+			const callId = callIdOf(event)
+			const data: unknown = event.data
+			if (callId !== undefined && isRecord(data) && data['name'] === CONTEXT_NOTES_TOOL_NAME) {
+				// Accounts were collected newest first, and a call always precedes its own
+				// result, so the first account whose call is met here is the newest
+				// validated one.
+				const known = accounts.find((candidate) => candidate.callId === callId)
+				if (known !== undefined) {
+					log = Math.max(log, known.revision)
+					break
+				}
+			}
 		}
 	}
 	return Math.max(log, stateOf(session).pending?.revision ?? 0)
@@ -500,11 +593,11 @@ function revisionFromToolResult(event: SessionEvent): number | undefined {
 /**
  * Recover the notebook text a `context_notes` call asked to write.
  *
- * This is the last-resort recovery arm: a `tool/call` event is logged BEFORE
- * `execute` runs, so it survives a crash inside the window where nothing else
- * about the write is durable yet. It records the REQUEST, not the outcome, so it
- * cannot prove the write was accepted — see {@link newestToolCallWrite}, which
- * deliberately re-validates the byte bound.
+ * A `tool/call` event is logged BEFORE `execute` runs, so this arm survives a
+ * crash inside the window where nothing else about the write is durable yet. It
+ * records the REQUEST, not the outcome: it proves the model asked for this text,
+ * never that the plugin accepted it. {@link scanLog} therefore pairs the request
+ * with the result that answers it and discards a request whose result failed.
  *
  * A later read call carries no `text` and is therefore skipped rather than
  * shadowing an earlier write.
@@ -535,18 +628,18 @@ function recordFromToolCall(event: SessionEvent): string | undefined {
  * Resolution order:
  *
  * 1. The session registry — the newest revision written in THIS process, which
- *    is authoritative while that revision is still awaiting delivery. It is what
- *    makes a revision readable from the instant `context_notes` returns.
- * 2. The raw log — authoritative after a resume, and once a revision is durable
- *    in either of its two shapes (delivered `user/message`, or still-pending
- *    `agent/inbox/spliced`).
+ *    is authoritative until the log says something about it. It is what makes a
+ *    revision readable from the instant `context_notes` returns.
+ * 2. The raw log — authoritative after a resume, from whichever shape it offers
+ *    (the call/result pair, a delivered `user/message`, or a pending splice).
  *
  * A registry entry is dropped as soon as the log catches up, so the two sources
  * cannot drift. Malformed log revisions are skipped; the newest valid wins.
  *
  * If the newest materialized revision is shadowed, that invisible revision IS the
  * state returned (with `visible: false`) rather than an older visible one: the
- * repair is to re-publish the newest content, not to resurrect an older revision.
+ * newest text is the authoritative one, and reporting an older revision because
+ * it happens to still be on the surface would resurrect stale content.
  *
  * The log scan is O(n) and runs on the hot path of every step, so the answer is
  * memoized per session. The memo key must cover all THREE ways the answer can
@@ -648,10 +741,11 @@ export interface WriteNotebookOptions {
 }
 
 /**
- * A notebook revision that has been validated and recorded but not yet delivered.
+ * A notebook revision that has been validated and recorded.
  *
- * The message is handed to `exec.deferContext` by the caller; see this module's
- * header for why appending it directly corrupts the surface.
+ * Nothing is appended or delivered: the durable record is this call's `tool/call`
+ * argument, and the message returned here is only the canonical shape of a
+ * notebook revision (used by callers that want one, and by tests).
  */
 export interface PendingNotebook {
 	/** The complete replacement text. */
@@ -691,18 +785,17 @@ export function markNotebookWriteRejected(session: Session, text: string): void 
  * revision number.
  *
  * The revision is readable through {@link latestNotebook} the moment this
- * returns, which upholds the invariant that a revision is readable from the
- * moment the tool call completes even though its message is delivered later.
+ * returns, from the registry, before the log has anything to say about it.
  *
  * The message content is WRAPPED with the untrusted-record warning here — where
- * the notebook is stored — because that warning has to travel with the text as
- * it is replayed to the model at a later step boundary.
+ * the notebook is stored — because that warning has to travel with the text
+ * wherever it is replayed (a checkpoint, or a reader that renders the message).
  * {@link latestNotebook} unwraps it again, so read → edit → write is idempotent.
  *
  * @param session - the live session the revision belongs to.
  * @param text - the complete replacement notebook text.
  * @param options - the configured byte bound.
- * @returns the validated revision and its message, ready for `deferContext`.
+ * @returns the validated revision and its canonical message.
  * @throws {NotebookTooLargeError} when `text` exceeds `options.maxNotebookBytes`.
  */
 export function writeNotebook(session: Session, text: string, options: WriteNotebookOptions): PendingNotebook {

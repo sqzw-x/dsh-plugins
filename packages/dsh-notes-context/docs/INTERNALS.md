@@ -120,7 +120,7 @@ DSH 内置压缩严格校验配置：不认识的键直接拒绝。所以本插�
 
 ## 其它实现细节
 
-- **笔记本的投递顺序。** 修订版本作为**延迟上下文**随工具结果一起送达，因此在工具结果**之后**进入上下文，不会打断 provider 要求的 `assistant(tool-call) → tool(result)` 相邻关系。
+- **笔记本不进入对话。** 写入既不追加消息也不走延迟上下文：把消息插进 `execute` 会落在自己的工具结果**之前**，破坏 provider 要求的 `assistant(tool-call) → tool(result)` 相邻关系；而延迟送达只是把同一段文本再放一遍。持久记录因此是调用本身（`tool/call` 的参数字符串 + `tool/result` 的版本号），滚动时从这里投影进 checkpoint。
 - **笔记本落在 `user/message` 上。** DSH 0.2.0-rc.2 要求未知事件类型携带 `ignorable` 标记才能被重新加载，而 SDK 没有写入该标记的接口，所以无法声明自有事件类型。详见 `src/notebook.ts` 顶部论证。
 - **摘要外面还有一层壳。** 内置压缩把每段静态摘要包进 `CHECKPOINT_PREAMBLE` + `<compacted-summary>`；除非重写整个事务，否则这层去不掉。内层的 `<context-window-rollover>` 块逐字保留。
 - **`enabled: false` 不是卸载。** 工具在挂载时注册，volatile 提交不会重新挂载，所以关掉后工具仍在模型的目录里，只是每次调用被拒（下一次调用起）。要从目录里消失得重启 app。

@@ -50,13 +50,20 @@ context_notes { text: "" }       → 清空
 
 ### 原文回读 `context_history`
 
-滚动仅将被替换的历史移出模型可见范围，不删除（日志 append-only）。模型可按 seq 回读原文：
+滚动仅将被替换的历史移出模型可见范围，不删除（日志 append-only）。模型可按 seq 回读，也可以直接搜：
 
 ```
-context_history                                 → 索引
-context_history { from: 120, to: 200 }          → 指定区间
-context_history { from: 0, to: 50, raw: true }  → 原文
+context_history                                       → 索引
+context_history { from: 120, to: 200 }                → 指定区间
+context_history { from: 0, to: 50, raw: true }        → 原文
+context_history { query: "ENOENT" }                   → 最新匹配，附命中前后的片段
+context_history { query: "ERR_\\d+", regex: true }    → 正则
+context_history { query: "needle", scope: "tool_result" } → 只搜工具输出
 ```
+
+`query` 默认按字面量、不区分大小写匹配；`regex: true` 才当正则。结果按事件正文匹配，**不是按摘要**——摘要只有前 200 字符，搜索命中的位置可能在它之后。命中条目渲染成命中点附近的片段（每条目最多三处），所以模型看到的是原文而不是摘要开头。
+
+`scope` 取值 `all`（默认）、`user`、`assistant`、`tool_call`、`tool_result`。插件自己的笔记与提醒消息虽然是 user 角色，但不算 `user` 事件——那是模型自己写的，要用 `context_notes` 读。
 
 ## 配置
 
@@ -107,7 +114,7 @@ dsh plugin --profile <profile> add "github:sqzw-x/dsh-plugins#path:packages/dsh-
 ## 限制
 
 - **笔记本质量由模型决定。** 插件不自动补写、不代为总结。模型未记录的信息需从原文回读。
-- **每次写入都是一条留在上下文里的消息。** 频繁重写会增大上下文。
+- **写入不产生对话消息。** 笔记只存在于调用记录、边界 checkpoint 和 `context_notes` 的读取结果里；窗口内想看全文得多一次工具调用。
 - **边界零开销 ≠ 全程零开销。** 写笔记本本身是一次工具调用，成本前移而非消除。
 - **DSH 自身的压缩配置不可见、不可改**，只能改配置文件并重启 dsh（原因见 [内部机制](https://github.com/sqzw-x/dsh-plugins/blob/main/packages/dsh-notes-context/docs/INTERNALS.md)）。
 - 受限工具集的会话（如子代理）若无法调用 `context_notes`，退化为无笔记本的滚动。
