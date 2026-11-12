@@ -32,7 +32,7 @@
  * (`dsh-agent-loop/lib/index.js:962-966`): a decision with no messages ends the
  * turn, so a listener that appends unconditionally manufactures a step — and
  * keeps manufacturing them, one per reminder — instead of letting the agent go
- * idle. Both injections here are therefore gated on the loop having decided to
+ * idle. The injection here is therefore gated on the loop having decided to
  * enter the step for its own reasons, which makes them incapable of changing
  * any turn's outcome.
  *

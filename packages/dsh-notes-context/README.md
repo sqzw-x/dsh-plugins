@@ -114,7 +114,7 @@ dsh plugin --profile <profile> add "github:sqzw-x/dsh-plugins#path:packages/dsh-
 ## 限制
 
 - **笔记本质量由模型决定。** 插件不自动补写、不代为总结。模型未记录的信息需从原文回读。
-- **每次写入都是一条留在上下文里的消息。** 频繁重写会增大上下文。
+- **写入不产生对话消息。** 笔记只存在于调用记录、边界 checkpoint 和 `context_notes` 的读取结果里；窗口内想看全文得多一次工具调用。
 - **边界零开销 ≠ 全程零开销。** 写笔记本本身是一次工具调用，成本前移而非消除。
 - **DSH 自身的压缩配置不可见、不可改**，只能改配置文件并重启 dsh（原因见 [内部机制](https://github.com/sqzw-x/dsh-plugins/blob/main/packages/dsh-notes-context/docs/INTERNALS.md)）。
 - 受限工具集的会话（如子代理）若无法调用 `context_notes`，退化为无笔记本的滚动。

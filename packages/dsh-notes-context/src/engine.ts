@@ -55,26 +55,30 @@
  *   `summary is not smaller than the shadowed content (...)`);
  * ```
  *
- * The framed price is effectively **fixed**: the parent's checkpoint preamble
- * (300 chars) plus the `<compacted-summary>` tags plus this engine's rollover
- * template plus the notebook capped by `notebookSummaryMaxChars`. Measured with
- * the harness's own estimator (`@deepseek-ai/dsh-token-meter/estimate`;
- * 4 chars/token plus 4 per block) it is **225 tokens with no notebook and about
- * 4,321 at the notebook's 16,384-character bound** — the default cap equals that
- * bound, so a notebook the writer accepted is projected whole. The shadowed span,
- * by contrast, is `thresholdTokens - retainTokens`, which at the parent's defaults
+ * The framed price is the parent's checkpoint preamble (300 chars) plus the
+ * `<compacted-summary>` tags plus this engine's rollover template plus the
+ * notebook projection. Measured with the harness's own estimator
+ * (`@deepseek-ai/dsh-token-meter/estimate`; 4 chars/token plus 4 per block) the
+ * frame alone is **225 tokens**, and a notebook at the 16,384-character default
+ * cap adds about 4,096. That is the worst case, not the usual one:
+ * {@link projectionCap} lowers the cap for the rollover whenever one third of the
+ * shadowed input is smaller, so the projection tracks the span it replaces
+ * instead of being a fixed cost. The shadowed span is
+ * `thresholdTokens - retainTokens`, which at the parent's defaults
  * (`thresholdRatio 0.8`, `retainRatio 0.16`) is orders of magnitude larger for an
- * ordinary window: ~41,984 at a 128,000-token window and ~640,000 at 1,000,000,
- * against a fixed 4,321.
+ * ordinary window: ~41,984 at a 128,000-token window and ~640,000 at 1,000,000.
  *
  * So the guard is reachable only once the shadowed span itself becomes tiny — and
  * the parent's fixed `headroomTokens` (65536) makes that a narrow band rather
  * than a smooth function of window size. Working in
  * `messageBudgetTokens = contextWindow - reservedCompletionTokens`, the shadowed
  * span at the moment a rollover first becomes eligible is
- * `0.84 * messageBudgetTokens - 65536`, which drops below the 4,321-token framed
- * cost only while `messageBudgetTokens` lies between **78,020 and 83,163** — a
- * band 5,144 window sizes wide. At the defaults:
+ * `0.84 * messageBudgetTokens - 65536`. With the adaptive cap the framed price
+ * shrinks with that span, so the guard stops being a cliff: the projection is
+ * truncated to a third of the input rather than the rollover being refused. The
+ * numbers below describe a fixed 738-token projection (the pre-adaptive 2,048
+ * character cap) and are kept as the measurement of the guard itself. At the
+ * defaults:
  *
  * - `messageBudgetTokens` below ~78,020 never reaches the guard: either the
  *   pressure budget is non-positive, or `retainTokens` is not below the
@@ -178,6 +182,9 @@ import type { BasicCompactionConfig } from '@deepseek-ai/dsh-compaction-basic'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock, Message, TokenUsage, ToolSchema } from '@deepseek-ai/dsh-llm'
+/* Type-only, erased at build time: loads `dsh-token-meter`'s `Context`
+ * augmentation so `ctx.tokenMeter` is typed here too. */
+import type {} from '@deepseek-ai/dsh-token-meter'
 import { baseEngineConfig, resolveReserveTokens, type Config as NotesLiveConfig } from './config.ts'
 import { notebookBlock } from './inject.ts'
 import { latestNotebook, CONTEXT_NOTES_TOOL_NAME, type NotebookState } from './notebook.ts'
@@ -574,7 +581,7 @@ export class NotesCompactionEngine extends BasicCompactionEngine {
 			input.messages.length,
 			notebook?.revision ?? 'none',
 		)
-		const summary: ContentBlock[] = [{ type: 'text', text: this.staticSummary(notebook) }]
+		const summary: ContentBlock[] = [{ type: 'text', text: this.staticSummary(notebook, this.projectionCap(input)) }]
 		signal?.throwIfAborted()
 		return {
 			summary,
@@ -591,13 +598,60 @@ export class NotesCompactionEngine extends BasicCompactionEngine {
 	 * rollover — the template and the notebook cap included.
 	 *
 	 * @param notebook - the latest notebook revision, when one exists.
+	 * @param maxChars - the projection cap resolved for THIS rollover.
 	 * @returns the rollover template followed by the notebook projection.
 	 */
-	private staticSummary(notebook: NotebookState | undefined): string {
+	private staticSummary(notebook: NotebookState | undefined, maxChars: number): string {
 		const rolloverText = this.notes.rolloverText.get()
 		if (notebook === undefined) return `${rolloverText}\n\n${NO_NOTEBOOK_NOTE}`
-		const capped = capChars(notebook.text, this.notes.notebookSummaryMaxChars.get())
+		const capped = capChars(notebook.text, maxChars)
 		return `${rolloverText}\n\n${notebookBlock(capped)}`
+	}
+
+	/**
+	 * The character cap for this rollover's notebook projection.
+	 *
+	 * The configured cap is a ceiling; this may only lower it, and only when the
+	 * projection would otherwise be a large share of the span it replaces. The
+	 * parent rejects a checkpoint whose framed price is not smaller than the
+	 * shadowed span, and on the automatic path that rejection is caught and logged
+	 * — compaction then simply stops happening, every step, with the session still
+	 * growing. A projection that is a fraction of the priced input leaves the guard
+	 * a wide margin; a normal rollover shadows hundreds of thousands of tokens, so
+	 * this never fires for an ordinary notebook.
+	 *
+	 * @param input - the replayed conversation the parent priced.
+	 * @returns the character cap to apply.
+	 */
+	private projectionCap(input: StaticSummarizationInput): number {
+		const configured = this.notes.notebookSummaryMaxChars.get()
+		const shadowedTokens = this.estimateInputTokens(input.messages)
+		if (shadowedTokens === undefined) return configured
+		// One third of the input, less the frame (preamble, tags, warning block),
+		// converted at the estimator's own 4 characters per token.
+		const budgetTokens = Math.floor(shadowedTokens / 3) - 400
+		if (budgetTokens <= 0) return 0
+		return Math.min(configured, budgetTokens * 4)
+	}
+
+	/**
+	 * Estimate the token count of the replayed input.
+	 *
+	 * Uses the meter's own `estimateMessage`, the same estimator that priced the
+	 * checkpoint on the other side of the guard, so the two numbers are comparable.
+	 *
+	 * @param messages - the replayed conversation prefix.
+	 * @returns the estimated total, or `undefined` when no meter is mounted or it
+	 *   refuses a message shape.
+	 */
+	private estimateInputTokens(messages: readonly Message[]): number | undefined {
+		try {
+			let total = 0
+			for (const message of messages) total += this.ctx.tokenMeter.estimateMessage(message)
+			return Number.isFinite(total) ? total : undefined
+		} catch {
+			return undefined
+		}
 	}
 
 	/**

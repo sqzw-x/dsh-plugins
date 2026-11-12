@@ -557,26 +557,36 @@ test('a search finds tool output past the summary cap and shows the hit', () => 
 	assert.equal(hit.text.includes('1 matches for "ENOENT"'), true)
 })
 
-test('a search is a literal substring unless regex is set', () => {
+test('a search is a literal substring, never a pattern', () => {
 	const session = newSession('search-2')
-	appendMessage(session, 'user/message', 'user', 'value axb here')
+	appendMessage(session, 'user/message', 'user', 'value axb here, and a.b later')
 	const cfg = notesConfig()
 
-	// `a.b` must not match `axb`: the dot is escaped in literal mode.
-	assert.equal(readHistory(session, { query: 'a.b' }, cfg, liveSignal()).lines.length, 0)
-	assert.equal(readHistory(session, { query: 'a.b', regex: true }, cfg, liveSignal()).lines.length, 1)
+	// `a.b` matches the literal text only: the dot is escaped, so it cannot match
+	// `axb`. Nothing here compiles a model-authored pattern — this scan is
+	// synchronous over every tool output, and a backtracking pattern would hang the
+	// host with no way to cancel it.
+	const literal = readHistory(session, { query: 'a.b' }, cfg, liveSignal())
+	assert.equal(literal.lines.length, 1)
+	assert.equal(literal.lines[0].includes('a.b later'), true)
+	// A pattern-shaped query is just characters, and finds nothing in this body.
+	assert.equal(readHistory(session, { query: 'ERR_\\d+' }, cfg, liveSignal()).lines.length, 0)
 })
 
-test('a regex query matches and an invalid one fails loudly', () => {
+test('a truncated search reports how many matches it dropped', () => {
 	const session = newSession('search-3')
-	appendMessage(session, 'user/message', 'user', 'ERR_42 then ERR_43')
-	const cfg = notesConfig()
+	for (const word of ['needle one', 'needle two', 'needle three']) {
+		appendMessage(session, 'user/message', 'user', word)
+	}
+	const cfg = notesConfig({ maxHistoryEntries: 2 })
 
-	const hits = readHistory(session, { query: 'ERR_\\d+', regex: true }, cfg, liveSignal())
-	assert.equal(hits.lines.length, 1)
-	assert.equal(hits.lines[0].includes('ERR_42'), true)
-
-	assert.throws(() => readHistory(session, { query: '(', regex: true }, cfg, liveSignal()), /invalid regular expression/u)
+	const hits = readHistory(session, { query: 'needle' }, cfg, liveSignal())
+	assert.equal(hits.lines.length, 2)
+	// The newest two are kept, and the header says what is missing: a silently
+	// shortened result reads as "that is all there is".
+	assert.equal(hits.text.includes('2 of 3 matches'), true)
+	assert.equal(hits.text.includes('oldest dropped'), true)
+	assert.equal(hits.lines[1].includes('needle three'), true)
 })
 
 test('caseSensitive opts out of the default case folding', () => {
@@ -623,4 +633,85 @@ test('a range still bounds a search', () => {
 	const bounded = readHistory(session, { query: 'needle', from: 0, to: Number(first.seq) }, cfg, liveSignal())
 	assert.equal(bounded.lines.length, 1)
 	assert.equal(bounded.lines[0].includes('needle one'), true)
+})
+
+test('an empty query is a plain read, and a raw search is refused', () => {
+	const session = newSession('search-8')
+	appendMessage(session, 'user/message', 'user', 'alpha')
+	const cfg = notesConfig()
+
+	const plain = readHistory(session, { query: '' }, cfg, liveSignal())
+	assert.equal(plain.lines.length, 1)
+	assert.equal(plain.text.includes('matches for'), false)
+
+	assert.throws(() => readHistory(session, { query: 'alpha', raw: true }, cfg, liveSignal()), /cannot be combined with raw/u)
+})
+
+test('search arguments are validated before the scan', () => {
+	const session = newSession('search-9')
+	appendMessage(session, 'user/message', 'user', 'alpha')
+	const cfg = notesConfig()
+
+	assert.throws(() => readHistory(session, { scope: 'bogus' }, cfg, liveSignal()), /scope must be one of/u)
+	assert.throws(() => readHistory(session, { from: 5, to: 1 }, cfg, liveSignal()), /must not exceed/u)
+})
+
+test('scope also narrows a plain range read', () => {
+	const session = newSession('search-10')
+	appendMessage(session, 'user/message', 'user', 'from the user')
+	appendMessage(session, 'tool/result', 'tool', 'from a tool')
+	const cfg = notesConfig()
+
+	const onlyTools = readHistory(session, { scope: 'tool_result' }, cfg, liveSignal())
+	assert.equal(onlyTools.lines.length, 1)
+	assert.equal(onlyTools.lines[0].includes('tool/result'), true)
+})
+
+test('system and developer messages render their own body', () => {
+	// Both wrap their message in `message`; reading the wrapper as if it were the
+	// message produced an empty body, the same bug as with `tool/result`.
+	const session = newSession('search-11')
+	appendMessage(session, 'system/message', 'system', 'SYSTEM-BODY')
+	appendMessage(session, 'developer/message', 'developer', 'DEVELOPER-BODY')
+	const cfg = notesConfig()
+
+	const text = readHistory(session, {}, cfg, liveSignal()).text
+	assert.equal(text.includes('SYSTEM-BODY'), true)
+	assert.equal(text.includes('DEVELOPER-BODY'), true)
+})
+
+test('a quoted revision account does not hide the notebook', () => {
+	// Any tool output can quote `Notebook revision N — …`: a `context_history` read
+	// of an earlier result does exactly that. An account only counts once the call
+	// it answers is found to be `context_notes`, or reading history would silently
+	// erase the notebook.
+	const session = newSession('search-12')
+	const written = writeNotebook(session, 'THE NOTEBOOK', writeOptions())
+	session.append('tool/call', { callId: 'notes-1', name: 'context_notes', arguments: JSON.stringify({ text: 'THE NOTEBOOK' }) })
+	session.append('tool/result', {
+		message: {
+			id: written.message.id,
+			role: 'tool',
+			toolCallId: 'notes-1',
+			content: [{ type: 'text', text: `Notebook revision ${String(written.revision)} — 12/16384 bytes (1 remaining).` }],
+			source: { kind: 'tool', toolCallId: 'notes-1' },
+		},
+	}, { surfaceOp: 'append' })
+	assert.equal(latestNotebook(session)?.text, 'THE NOTEBOOK')
+
+	session.append('tool/call', { callId: 'history-1', name: 'context_history', arguments: '{}' })
+	session.append('tool/result', {
+		message: {
+			id: 'quoted-1',
+			role: 'tool',
+			toolCallId: 'history-1',
+			content: [{ type: 'text', text: 'Notebook revision 9 — 9999/16384 bytes (6385 remaining).' }],
+			source: { kind: 'tool', toolCallId: 'history-1' },
+		},
+	}, { surfaceOp: 'append' })
+
+	const after = latestNotebook(session)
+	assert.equal(after?.text, 'THE NOTEBOOK')
+	// And the quoted number must not inflate the next allocation.
+	assert.equal(writeNotebook(session, 'NEXT', writeOptions()).revision, 2)
 })

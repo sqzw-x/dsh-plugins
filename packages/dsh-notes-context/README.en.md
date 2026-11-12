@@ -138,8 +138,9 @@ The bundle contains two patch rows: it disables `compaction-basic` and mounts th
 
 - **Notebook quality is decided by the model.** The plugin does not backfill or summarize
   for you. Anything the model failed to record must be recovered from raw history.
-- **Every write is a message that stays in the conversation.** Frequent rewrites grow the
-  context.
+- **A write produces no conversation message.** The notebook lives in the call record, in
+  the boundary checkpoint, and in whatever `context_notes` returns; seeing it again inside
+  the same window costs one tool call.
 - **A free boundary is not a free feature.** Writing the notebook is a tool call; the cost
   moves earlier rather than away.
 - **DSH's own compaction settings are neither visible nor changeable here** — they live in

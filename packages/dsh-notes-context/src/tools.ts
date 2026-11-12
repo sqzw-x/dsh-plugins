@@ -267,27 +267,22 @@ function bodyOf(event: SessionEvent, raw: boolean): string {
 /**
  * Build the matcher for one search.
  *
- * A literal query is escaped, so `a.b` means those four characters; `regex: true`
- * compiles it as written, and an invalid pattern fails the call with the engine's
- * own message instead of silently matching nothing.
+ * Literal text only, escaped into a regular expression so `matchAll` can report
+ * positions. A model-authored pattern is NOT compiled as written: this runs
+ * synchronously over every event body, including tool output that untrusted
+ * content controls, and a backtracking pattern like `(a+)+$` takes minutes on a
+ * few dozen characters — one call would hang the host with no way to cancel it.
  *
- * @param query - the pattern as the model wrote it.
- * @param regex - whether the pattern is a regular expression.
+ * @param query - the text to find, as the model wrote it.
  * @param caseSensitive - whether matching is case-sensitive.
  * @returns a global regex usable with `matchAll` and `search`.
- * @throws when the pattern is too long or does not compile.
+ * @throws when the query is too long to be a search term.
  */
-function buildMatcher(query: string, regex: boolean, caseSensitive: boolean): RegExp {
+function buildMatcher(query: string, caseSensitive: boolean): RegExp {
 	if (query.length > MAX_QUERY_CHARS) {
 		throw new Error(`${CONTEXT_HISTORY_TOOL}: query must be at most ${String(MAX_QUERY_CHARS)} characters`)
 	}
-	const source = regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-	try {
-		return new RegExp(source, caseSensitive ? 'g' : 'gi')
-	} catch (error) {
-		const reason = error instanceof Error ? error.message : String(error)
-		throw new Error(`${CONTEXT_HISTORY_TOOL}: ${regex ? 'invalid regular expression' : 'invalid query'}: ${reason}`)
-	}
+	return new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), caseSensitive ? 'g' : 'gi')
 }
 
 /**
@@ -322,10 +317,8 @@ export interface HistoryReadOptions {
 	readonly to?: number
 	/** Emit raw event JSON instead of compact summaries. */
 	readonly raw?: boolean
-	/** Pattern to search for; omitted means "read the range" instead. */
+	/** Text to search for; omitted or empty means "read the range" instead. */
 	readonly query?: string
-	/** Treat {@link query} as a regular expression rather than literal text. */
-	readonly regex?: boolean
 	/** Match case-sensitively. Defaults to false. */
 	readonly caseSensitive?: boolean
 	/** Restrict which events may be returned. Defaults to `all`. */
@@ -373,11 +366,21 @@ export function readHistory(
 	const total = events.length
 	const lower = options.from ?? 0
 	const upper = options.to ?? (total - 1)
+	if (lower > upper) {
+		throw new Error(`${CONTEXT_HISTORY_TOOL}: from (${String(lower)}) must not exceed to (${String(upper)})`)
+	}
 	const raw = options.raw === true
 	const scope = options.scope ?? 'all'
-	const query = options.query
-	const matcher =
-		query === undefined ? undefined : buildMatcher(query, options.regex === true, options.caseSensitive === true)
+	if (!HISTORY_SCOPES.includes(scope)) {
+		throw new Error(`${CONTEXT_HISTORY_TOOL}: scope must be one of ${HISTORY_SCOPES.join(', ')}`)
+	}
+	// An empty query is a caller saying "no filter", not a pattern that matches
+	// every position.
+	const query = options.query === undefined || options.query.length === 0 ? undefined : options.query
+	if (query !== undefined && raw) {
+		throw new Error(`${CONTEXT_HISTORY_TOOL}: query cannot be combined with raw; search the summaries or read a range raw`)
+	}
+	const matcher = query === undefined ? undefined : buildMatcher(query, options.caseSensitive === true)
 	// With an explicit range the caller asked for exactly that window, so the
 	// ceiling is the hard cap only. With no range the caller wants "recent
 	// history", so a bounded sliding window over the newest events applies —
@@ -388,12 +391,15 @@ export function readHistory(
 		: Math.min(cfg.historyDefaultLimit.get(), cfg.maxHistoryEntries.get())
 	const byteBudget = cfg.maxHistoryBytes.get()
 	const selected: SessionEvent[] = []
+	/** Events that passed every filter, before the entry ceiling. */
+	let matched = 0
 	for (const event of events) {
 		const seq = Number(event.seq)
 		if (seq < lower || seq > upper) continue
 		if (scope !== 'all' && scopeOfEvent(event) !== scope) continue
 		// `search` ignores `lastIndex`, unlike `test` on a global regex.
 		if (matcher !== undefined && bodyOf(event, raw).search(matcher) < 0) continue
+		matched += 1
 		if (selected.length >= ceiling) selected.shift()
 		selected.push(event)
 	}
@@ -416,14 +422,19 @@ export function readHistory(
 		reversedSeqs.push(seq)
 		bytes += lineBytes
 	}
-	if (reversedSeqs.length === 0) return { lines: [], text: '', total }
-	const newestSeq = reversedSeqs[0] as number
-	const oldestSeq = reversedSeqs[reversedSeqs.length - 1] as number
-	const span = `entries #${String(oldestSeq)}-#${String(newestSeq)} of ${String(total)} events`
+	const span =
+		reversedSeqs.length === 0
+			? `no entries shown of ${String(total)} events`
+			: `entries #${String(reversedSeqs[reversedSeqs.length - 1] as number)}-#${String(reversedSeqs[0] as number)} of ${String(total)} events`
+	// Report what was DROPPED, not just what came back: a limit that silently
+	// shortens a search result reads as "that is all there is".
+	const shown = reversedSeqs.length
+	const counted = query === undefined ? undefined : shown === matched ? `${String(matched)} matches` : `${String(shown)} of ${String(matched)} matches`
 	const header =
 		query === undefined
 			? `session ${String(session.id)} · ${span}\n\n`
-			: `session ${String(session.id)} · ${String(reversedSeqs.length)} matches for "${query.length > 60 ? `${query.slice(0, 60)}…` : query}"${scope === 'all' ? '' : ` in ${scope}`} · ${span}\n\n`
+			: `session ${String(session.id)} · ${counted ?? ''} for "${query.length > 60 ? `${query.slice(0, 60)}…` : query}"${scope === 'all' ? '' : ` in ${scope}`}${shown < matched ? ' (oldest dropped by the entry ceiling and the byte budget; narrow the range)' : ''} · ${span}\n\n`
+	if (shown === 0) return { lines: [], text: '', total }
 	return { lines: reversed.reverse(), text: header + reversed.join('\n\n'), total }
 }
 
@@ -594,11 +605,7 @@ export function registerTools(ctx: Context, cfg: Config): boolean {
 				query: {
 					type: 'string',
 					description:
-						'Text to search for. Returns the newest matching events as snippets around the hit. Omit to read the range instead. Combine with `from`/`to` to search inside one span.',
-				},
-				regex: {
-					type: 'boolean',
-					description: 'Treat `query` as a JavaScript regular expression instead of literal text. Default false.',
+						'Literal text to find (case-insensitive unless `caseSensitive`). Returns the newest matching events as snippets around the hit. Omit to read the range instead. Combine with `from`/`to` to search inside one span.',
 				},
 				caseSensitive: {
 					type: 'boolean',
@@ -649,7 +656,6 @@ export function registerTools(ctx: Context, cfg: Config): boolean {
 						...(args.to === undefined ? {} : { to: args.to }),
 						...(args.raw === undefined ? {} : { raw: args.raw }),
 						...(args.query === undefined ? {} : { query: args.query }),
-						...(args.regex === undefined ? {} : { regex: args.regex }),
 						...(args.caseSensitive === undefined ? {} : { caseSensitive: args.caseSensitive }),
 						...(args.scope === undefined ? {} : { scope: args.scope }),
 					},
