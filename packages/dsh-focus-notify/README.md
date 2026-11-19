@@ -64,6 +64,12 @@ __dshFocusNotify.test()                        // 绕过规则立刻发一条，
 __dshFocusNotify.open('session-id')            // 按 id 切会话（缺省切当前会话），验证点击路径
 ```
 
+想换成"标题是会话名、正文是内容"的排法：
+
+```js
+__dshFocusNotify.configure({ sessionTitle: true })
+```
+
 `debug()` 里两个字段专门用来查"点了没反应"：
 
 - `navigation` — 点击时会用哪个服务切会话：`uiWorkspace.openSession` / `sessions.open` / `none`。
@@ -77,6 +83,8 @@ __dshFocusNotify.open('session-id')            // 按 id 切会话（缺省切�
 | `ignoreSubagent` | `true` | 子代理会话不提醒 |
 | `language` | `'auto'` | 文案语言：跟随 DSH 界面语言，也可固定 `'zh'` / `'en'` |
 | `sound` | `false` | 通知之外再响一声（WebAudio，需要页面有过交互） |
+| `preview` | `true` | 完成提醒里带上最后一条回复的开头（≤100 字）。只有页面绑定着的那个会话拿得到正文，其它会话仍用状态文案 |
+| `sessionTitle` | `false` | 把会话名放到标题行，正文只放回复开头或 `回复已完成`——更接近系统通知的常见排法 |
 
 配置存在 `localStorage` 的 `dshFocusNotify.config`。
 

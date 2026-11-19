@@ -65,6 +65,8 @@ Every posted notification also dispatches a `dsh-focus-notify:alert` event on `w
 | `enabled` | `true` | master switch |
 | `ignoreSubagent` | `true` | subagent sessions stay silent |
 | `language` | `'auto'` | copy language: follows the DSH locale, or pin `'zh'` / `'en'` |
+| `preview` | `true` | Include the beginning of the finished reply (≤100 chars). Only the conversation the page has bound exposes a transcript, so other conversations keep the status copy |
+| `sessionTitle` | `false` | Put the conversation name in the title line and the reply (or `reply finished`) in the body |
 | `sound` | `false` | optional WebAudio chime on top of the notification |
 
 ## How it works
